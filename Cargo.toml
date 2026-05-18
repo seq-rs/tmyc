@@ -1,0 +1,12 @@
+[package]
+name = "tmyc"
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.95.0"
+
+[lib]
+name = "tmyc"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
