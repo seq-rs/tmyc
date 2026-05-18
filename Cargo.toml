@@ -2,7 +2,14 @@
 name = "tmyc"
 version = "0.1.1"
 edition = "2024"
+authors = ["recrypted <git@recrypted.net>"]
+keywords = ["derive", "serde", "serialization", "yaml"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/seq-rs/tmyc"
+documentation = "https://docs.rs/tmyc/"
+description = "Implementation of serde serialization and deserialization from YAML data format"
 rust-version = "1.95.0"
+categories = ["encoding", "parser-implementations", "parsing-tools"]
 
 [lib]
 name = "tmyc"
