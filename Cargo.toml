@@ -9,7 +9,7 @@ repository = "https://github.com/seq-rs/tmyc"
 documentation = "https://docs.rs/tmyc/"
 description = "Implementation of serde serialization and deserialization from YAML data format"
 rust-version = "1.95.0"
-categories = ["encoding", "parser-implementations", "parsing-tools"]
+categories = ["encoding", "parser-implementations", "parsing"]
 
 [lib]
 name = "tmyc"
