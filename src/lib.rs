@@ -1,4 +1,5 @@
 
+mod emitter;
 mod error;
 mod parser;
 mod patterns;
