@@ -1,4 +1,4 @@
-//! # tmyc — Personal YAML for serde
+//! # tmyc — YAML data format implementation for serde
 //!
 //! A YAML 1.2 best-effort parser and emmitter with the goals of:
 //!
