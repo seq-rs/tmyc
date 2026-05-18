@@ -1,0 +1,17 @@
+x-defaults: &defaults
+  restart: always
+  logging:
+    driver: json-file
+
+services:
+  web:
+    <<: *defaults
+    image: nginx:1.25
+    ports:
+      - "80:80"
+  api:
+    <<: *defaults
+    image: api:latest
+    restart: on-failure
+    environment:
+      LOG_LEVEL: info
