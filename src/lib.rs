@@ -1,8 +1,12 @@
 //! # tmyc — Personal YAML for serde
 //!
-//! A YAML 1.2 parser/emitter built for the maintainer, not for general
-//! consumption. Targets: docker-compose, kubernetes/kustomize manifests, sops
-//! files, XDG configs (lazygit etc). Designed for trust over universality.
+//! A YAML 1.2 best-effort parser and emmitter with the goals of:
+//!
+//! - Filling the gap after archival of `serde-yaml`
+//! - Best effort compliance to support common docker-compose, kubernetes resource and configuration
+//! files
+//! - Trustworthy, least-dependencies implementation to avoid the trust issues surrounding other
+//! similarly motivated replacement crates dismissed for suspicious, inexplicable dependencies and code
 //!
 //! ## Quick start
 //!
