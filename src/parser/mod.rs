@@ -9,7 +9,7 @@ mod block_seq;
 use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
-    Result, Value,
+    Result, BorrowedValue,
     patterns::resolve_scalar,
     value::{apply_tag, resolve_merge_keys},
 };
@@ -21,10 +21,10 @@ use crate::{
 /// Reach for `Parser` when you need:
 ///
 /// - **Multi-document streams** — [`Parser::parse_all`] returns
-///   `Vec<Value>` for inputs containing `---`-separated documents.
+///   `Vec<BorrowedValue>` for inputs containing `---`-separated documents.
 /// - **Manual inspection** — call [`Parser::parse`] and walk the
-///   [`Value`](crate::Value) tree yourself before deserializing.
-/// - **Zero-copy borrows** — keep the resulting `Value` alive and use
+///   [`BorrowedValue`](crate::BorrowedValue) tree yourself before deserializing.
+/// - **Zero-copy borrows** — keep the resulting `BorrowedValue` alive and use
 ///   [`from_value`](crate::from_value) so struct fields can be `&str`
 ///   slices of the input.
 pub struct Parser<'a> {
@@ -34,7 +34,7 @@ pub struct Parser<'a> {
     pub(super) line: usize,
     /// 1-based column for errors
     pub(super) col: usize,
-    pub(super) anchors: HashMap<&'a str, crate::Value<'a>>,
+    pub(super) anchors: HashMap<&'a str, crate::BorrowedValue<'a>>,
 }
 
 impl<'a> Parser<'a> {
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
     ///
     /// Handles `---` start markers, `...` end markers, and `%`-prefix
     /// directives. Anchors are reset between documents per spec §9.1.
-    pub fn parse_all(&mut self) -> Result<Vec<Value<'a>>> {
+    pub fn parse_all(&mut self) -> Result<Vec<BorrowedValue<'a>>> {
         let mut docs = Vec::new();
         loop {
             self.skip_blank_and_comment_lines();
@@ -94,14 +94,14 @@ impl<'a> Parser<'a> {
 
     /// Parse a single-document YAML stream
     ///
-    /// Input: `"a: 1\nb: 2\n"` → Output: `Value::Map([("a", 1), ("b", 2)])`
+    /// Input: `"a: 1\nb: 2\n"` → Output: `BorrowedValue::Map([("a", 1), ("b", 2)])`
     ///
     /// Errors if the stream contains more than one document. Returns
-    /// `Value::Null` on empty input.
-    pub fn parse(&mut self) -> Result<Value<'a>> {
+    /// `BorrowedValue::Null` on empty input.
+    pub fn parse(&mut self) -> Result<BorrowedValue<'a>> {
         let mut docs = self.parse_all()?;
         match docs.len() {
-            0 => Ok(Value::Null),
+            0 => Ok(BorrowedValue::Null),
             1 => Ok(docs.pop().unwrap()),
             n => Err(self.err(format!(
                 "expected single document, got {n}"
@@ -135,33 +135,33 @@ impl<'a> Parser<'a> {
     /// - b
     /// ```
     ///
-    /// Output: `Value::Tagged("!mytag", Value::Seq([String("a"), String("b")]))`
+    /// Output: `BorrowedValue::Tagged("!mytag", BorrowedValue::Seq([String("a"), String("b")]))`
     ///
     /// `min_indent` is the minimum indent the node must have to belong to the
-    /// caller; content at lesser indent yields `Value::Null`. Accepts cursor
+    /// caller; content at lesser indent yields `BorrowedValue::Null`. Accepts cursor
     /// at line-start (skips blanks + checks indent) or mid-line (uses
     /// `col - 1` as effective indent).
-    pub fn parse_node(&mut self, min_indent: usize) -> Result<Value<'a>> {
+    pub fn parse_node(&mut self, min_indent: usize) -> Result<BorrowedValue<'a>> {
         // Catch doc markers at cursor (covers entries from parse_all where
         // consume_doc_marker has just advanced past the line break)
         if self.at_doc_marker(b"---") || self.at_doc_marker(b"...") {
-            return Ok(Value::Null);
+            return Ok(BorrowedValue::Null);
         }
 
         let indent = if self.at_line_end() {
             self.skip_blank_and_comment_lines();
             if self.at_eof() {
-                return Ok(Value::Null);
+                return Ok(BorrowedValue::Null);
             }
 
             // Document boundary terminates a node — parse_all handles the marker
             if self.at_doc_marker(b"---") || self.at_doc_marker(b"...") {
-                return Ok(Value::Null);
+                return Ok(BorrowedValue::Null);
             }
 
             let indent = self.current_indent()?;
             if indent < min_indent {
-                return Ok(Value::Null);
+                return Ok(BorrowedValue::Null);
             }
 
             for _ in 0..indent {
@@ -219,9 +219,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Route the cursor to the right node parser based on the next byte
-    fn dispatch(&mut self, indent: usize) -> Result<Value<'a>> {
+    fn dispatch(&mut self, indent: usize) -> Result<BorrowedValue<'a>> {
         match self.peek() {
-            None => Ok(Value::Null),
+            None => Ok(BorrowedValue::Null),
             Some(b'[') => self.parse_flow_seq(),
             Some(b'{') => self.parse_flow_map(),
             Some(b'|') => self.parse_block_scalar(),
@@ -279,9 +279,9 @@ impl<'a> Parser<'a> {
     /// *id
     /// ```
     ///
-    /// Output: `Value::UInt(42)` (cloned from the anchors map). Errors if
+    /// Output: `BorrowedValue::UInt(42)` (cloned from the anchors map). Errors if
     /// the anchor name is unknown or empty.
-    fn parse_alias(&mut self) -> Result<Value<'a>> {
+    fn parse_alias(&mut self) -> Result<BorrowedValue<'a>> {
         self.advance(); // consume '*'
 
         let start = self.pos;
@@ -361,10 +361,10 @@ impl<'a> Parser<'a> {
 
     /// Parse one scalar token (plain, double-quoted, or single-quoted)
     ///
-    /// Input: `"42"` → Output: `Value::String("42")` (quoted stays string)
-    /// Input: `42`   → Output: `Value::UInt(42)` (plain resolves via `resolve_scalar`)
-    fn parse_scalar_token(&mut self) -> Result<Value<'a>> {
-        use Value::*;
+    /// Input: `"42"` → Output: `BorrowedValue::String("42")` (quoted stays string)
+    /// Input: `42`   → Output: `BorrowedValue::UInt(42)` (plain resolves via `resolve_scalar`)
+    fn parse_scalar_token(&mut self) -> Result<BorrowedValue<'a>> {
+        use BorrowedValue::*;
         match self.peek() {
             Some(b'"') => Ok(String(
                 self.parse_double_quoted(self.col.saturating_sub(1))?,
@@ -412,54 +412,54 @@ fn trim_trailing_whitespace_end(bytes: &[u8]) -> usize {
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> Value<'_> {
+    fn parse(src: &str) -> BorrowedValue<'_> {
         Parser::new(src).parse().unwrap()
     }
 
     #[test]
     fn standard_str_tag_drops_wrapper() {
         let v = parse("!!str 42\n");
-        assert!(matches!(v, Value::String(s) if s == "42"));
+        assert!(matches!(v, BorrowedValue::String(s) if s == "42"));
     }
 
     #[test]
     fn standard_int_tag_coerces_quoted() {
         let v = parse("!!int \"5\"\n");
-        assert!(matches!(v, Value::UInt(5)));
+        assert!(matches!(v, BorrowedValue::UInt(5)));
     }
 
     #[test]
     fn standard_int_tag_accepts_hex() {
         let v = parse("!!int 0xff\n");
-        assert!(matches!(v, Value::UInt(255)));
+        assert!(matches!(v, BorrowedValue::UInt(255)));
     }
 
     #[test]
     fn standard_float_tag_promotes_int() {
         let v = parse("!!float 7\n");
-        assert!(matches!(v, Value::Float(f) if f == 7.0));
+        assert!(matches!(v, BorrowedValue::Float(f) if f == 7.0));
     }
 
     #[test]
     fn standard_null_tag_drops_inner() {
         let v = parse("!!null whatever\n");
-        assert!(matches!(v, Value::Null));
+        assert!(matches!(v, BorrowedValue::Null));
     }
 
     #[test]
     fn standard_bool_tag_rejects_yaml1_1_spelling() {
         // YES resolves to String("YES"); !!bool no-ops on it
         let v = parse("!!bool YES\n");
-        assert!(matches!(v, Value::String(s) if s == "YES"));
+        assert!(matches!(v, BorrowedValue::String(s) if s == "YES"));
     }
 
     #[test]
     fn custom_tag_wraps() {
         let v = parse("!myapp/Thing foo\n");
         match v {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!myapp/Thing");
-                assert!(matches!(*inner, Value::String(s) if s == "foo"));
+                assert!(matches!(*inner, BorrowedValue::String(s) if s == "foo"));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -469,9 +469,9 @@ mod tests {
     fn verbatim_tag_wraps() {
         let v = parse("!<tag:example.com,2026:x> 5\n");
         match v {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!<tag:example.com,2026:x>");
-                assert!(matches!(*inner, Value::UInt(5)));
+                assert!(matches!(*inner, BorrowedValue::UInt(5)));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -481,9 +481,9 @@ mod tests {
     fn local_tag_short_form() {
         let v = parse("!local foo\n");
         match v {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!local");
-                assert!(matches!(*inner, Value::String(s) if s == "foo"));
+                assert!(matches!(*inner, BorrowedValue::String(s) if s == "foo"));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -493,13 +493,13 @@ mod tests {
     fn custom_tag_on_block_seq() {
         let v = parse("!mytag\n- a\n- b\n");
         match v {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!mytag");
                 match *inner {
-                    Value::Seq(items) => {
+                    BorrowedValue::Seq(items) => {
                         assert_eq!(items.len(), 2);
-                        assert!(matches!(&items[0], Value::String(s) if s == "a"));
-                        assert!(matches!(&items[1], Value::String(s) if s == "b"));
+                        assert!(matches!(&items[0], BorrowedValue::String(s) if s == "a"));
+                        assert!(matches!(&items[1], BorrowedValue::String(s) if s == "b"));
                     }
                     other => panic!("expected Seq, got {other:?}"),
                 }
@@ -512,13 +512,13 @@ mod tests {
     fn custom_tag_on_block_map() {
         let v = parse("!mytag\nk: v\n");
         match v {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!mytag");
                 match *inner {
-                    Value::Map(pairs) => {
+                    BorrowedValue::Map(pairs) => {
                         assert_eq!(pairs.len(), 1);
-                        assert!(matches!(&pairs[0].0, Value::String(s) if s == "k"));
-                        assert!(matches!(&pairs[0].1, Value::String(s) if s == "v"));
+                        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "k"));
+                        assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "v"));
                     }
                     other => panic!("expected Map, got {other:?}"),
                 }
@@ -530,14 +530,14 @@ mod tests {
     #[test]
     fn no_tag_parses_plain() {
         let v = parse("42\n");
-        assert!(matches!(v, Value::UInt(42)));
+        assert!(matches!(v, BorrowedValue::UInt(42)));
     }
 
     // anchors & aliases
 
-    fn map_pairs(v: Value<'_>) -> Vec<(Value<'_>, Value<'_>)> {
+    fn map_pairs(v: BorrowedValue<'_>) -> Vec<(BorrowedValue<'_>, BorrowedValue<'_>)> {
         match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             other => panic!("expected Map, got {other:?}"),
         }
     }
@@ -546,8 +546,8 @@ mod tests {
     fn anchor_then_alias_scalar() {
         let pairs = map_pairs(parse("a: &id 42\nb: *id\n"));
         assert_eq!(pairs.len(), 2);
-        assert!(matches!(&pairs[0].1, Value::UInt(42)));
-        assert!(matches!(&pairs[1].1, Value::UInt(42)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(42)));
+        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(42)));
     }
 
     #[test]
@@ -555,11 +555,11 @@ mod tests {
         let src = "list: &l\n  - a\n  - b\ncopy: *l\n";
         let pairs = map_pairs(parse(src));
         assert_eq!(pairs.len(), 2);
-        let seq_eq = |v: &Value<'_>| match v {
-            Value::Seq(items) => {
+        let seq_eq = |v: &BorrowedValue<'_>| match v {
+            BorrowedValue::Seq(items) => {
                 items.len() == 2
-                    && matches!(&items[0], Value::String(s) if s == "a")
-                    && matches!(&items[1], Value::String(s) if s == "b")
+                    && matches!(&items[0], BorrowedValue::String(s) if s == "a")
+                    && matches!(&items[1], BorrowedValue::String(s) if s == "b")
             }
             _ => false,
         };
@@ -590,15 +590,15 @@ mod tests {
     #[test]
     fn anchor_then_tag_order() {
         let pairs = map_pairs(parse("a: &id !!str 42\nb: *id\n"));
-        assert!(matches!(&pairs[0].1, Value::String(s) if s == "42"));
-        assert!(matches!(&pairs[1].1, Value::String(s) if s == "42"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "42"));
+        assert!(matches!(&pairs[1].1, BorrowedValue::String(s) if s == "42"));
     }
 
     #[test]
     fn tag_then_anchor_order() {
         let pairs = map_pairs(parse("a: !!str &id 42\nb: *id\n"));
-        assert!(matches!(&pairs[0].1, Value::String(s) if s == "42"));
-        assert!(matches!(&pairs[1].1, Value::String(s) if s == "42"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "42"));
+        assert!(matches!(&pairs[1].1, BorrowedValue::String(s) if s == "42"));
     }
 
     #[test]
@@ -606,9 +606,9 @@ mod tests {
         let pairs = map_pairs(parse("a: &id !myapp/T foo\nb: *id\n"));
         for (_, v) in &pairs {
             match v {
-                Value::Tagged(tag, inner) => {
+                BorrowedValue::Tagged(tag, inner) => {
                     assert_eq!(tag, "!myapp/T");
-                    assert!(matches!(inner.as_ref(), Value::String(s) if s == "foo"));
+                    assert!(matches!(inner.as_ref(), BorrowedValue::String(s) if s == "foo"));
                 }
                 other => panic!("expected Tagged, got {other:?}"),
             }
@@ -619,7 +619,7 @@ mod tests {
     fn reanchor_latest_wins() {
         let src = "first: &x 1\nsecond: &x 2\nthird: *x\n";
         let pairs = map_pairs(parse(src));
-        assert!(matches!(&pairs[2].1, Value::UInt(2)));
+        assert!(matches!(&pairs[2].1, BorrowedValue::UInt(2)));
     }
 
     #[test]
@@ -637,15 +637,15 @@ mod tests {
         let pairs = map_pairs(parse(src));
         assert_eq!(pairs.len(), 2);
         assert_eq!(&pairs[0].1, &pairs[1].1);
-        assert!(matches!(&pairs[0].1, Value::Map(_)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Map(_)));
     }
 
     // multi-document streams
 
-    fn parse_all(src: &str) -> Vec<Value<'_>> {
+    fn parse_all(src: &str) -> Vec<BorrowedValue<'_>> {
         Parser::new(src).parse_all().unwrap()
     }
-    fn parse_one(src: &str) -> Value<'_> {
+    fn parse_one(src: &str) -> BorrowedValue<'_> {
         Parser::new(src).parse().unwrap()
     }
 
@@ -653,22 +653,22 @@ mod tests {
     fn stream_single_implicit_doc() {
         let docs = parse_all("a: 1\nb: 2\n");
         assert_eq!(docs.len(), 1);
-        assert!(matches!(&docs[0], Value::Map(p) if p.len() == 2));
+        assert!(matches!(&docs[0], BorrowedValue::Map(p) if p.len() == 2));
     }
 
     #[test]
     fn stream_single_explicit_doc() {
         let docs = parse_all("---\na: 1\n");
         assert_eq!(docs.len(), 1);
-        assert!(matches!(&docs[0], Value::Map(p) if p.len() == 1));
+        assert!(matches!(&docs[0], BorrowedValue::Map(p) if p.len() == 1));
     }
 
     #[test]
     fn stream_two_explicit_docs() {
         let docs = parse_all("---\na: 1\n---\nb: 2\n");
         assert_eq!(docs.len(), 2);
-        assert!(matches!(&docs[0], Value::Map(p) if matches!(&p[0].0, Value::String(s) if s == "a")));
-        assert!(matches!(&docs[1], Value::Map(p) if matches!(&p[0].0, Value::String(s) if s == "b")));
+        assert!(matches!(&docs[0], BorrowedValue::Map(p) if matches!(&p[0].0, BorrowedValue::String(s) if s == "a")));
+        assert!(matches!(&docs[1], BorrowedValue::Map(p) if matches!(&p[0].0, BorrowedValue::String(s) if s == "b")));
     }
 
     #[test]
@@ -684,7 +684,7 @@ kind: Service
         let docs = parse_all(src);
         assert_eq!(docs.len(), 2);
         for d in &docs {
-            assert!(matches!(d, Value::Map(p) if p.len() == 2));
+            assert!(matches!(d, BorrowedValue::Map(p) if p.len() == 2));
         }
     }
 
@@ -703,8 +703,8 @@ kind: Service
     fn stream_only_markers() {
         let docs = parse_all("---\n---\nb: 2\n");
         assert_eq!(docs.len(), 2);
-        assert!(matches!(&docs[0], Value::Null));
-        assert!(matches!(&docs[1], Value::Map(_)));
+        assert!(matches!(&docs[0], BorrowedValue::Null));
+        assert!(matches!(&docs[1], BorrowedValue::Map(_)));
     }
 
     #[test]
@@ -722,7 +722,7 @@ kind: Service
     #[test]
     fn parse_single_succeeds_on_one() {
         let v = parse_one("a: 1\n");
-        assert!(matches!(v, Value::Map(p) if p.len() == 1));
+        assert!(matches!(v, BorrowedValue::Map(p) if p.len() == 1));
     }
 
     #[test]
@@ -733,7 +733,7 @@ kind: Service
 
     #[test]
     fn parse_single_on_empty() {
-        assert!(matches!(parse_one(""), Value::Null));
+        assert!(matches!(parse_one(""), BorrowedValue::Null));
     }
 
     #[test]
@@ -749,27 +749,27 @@ kind: Service
         let docs = parse_all("key: '---'\n");
         assert_eq!(docs.len(), 1);
         let pairs = match &docs[0] {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
-        assert!(matches!(&pairs[0].1, Value::String(s) if s == "---"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "---"));
     }
 
     #[test]
     fn seq_dash_not_confused_with_marker() {
         let docs = parse_all("- item\n- item2\n");
         assert_eq!(docs.len(), 1);
-        assert!(matches!(&docs[0], Value::Seq(items) if items.len() == 2));
+        assert!(matches!(&docs[0], BorrowedValue::Seq(items) if items.len() == 2));
     }
 
     // merge keys (<<: *base)
 
-    fn keys_of(v: &Value<'_>) -> Vec<String> {
+    fn keys_of(v: &BorrowedValue<'_>) -> Vec<String> {
         match v {
-            Value::Map(pairs) => pairs
+            BorrowedValue::Map(pairs) => pairs
                 .iter()
                 .map(|(k, _)| match k {
-                    Value::String(s) => s.to_string(),
+                    BorrowedValue::String(s) => s.to_string(),
                     other => format!("{other:?}"),
                 })
                 .collect(),
@@ -777,12 +777,12 @@ kind: Service
         }
     }
 
-    fn get<'a, 'b>(v: &'a Value<'b>, key: &str) -> &'a Value<'b> {
+    fn get<'a, 'b>(v: &'a BorrowedValue<'b>, key: &str) -> &'a BorrowedValue<'b> {
         match v {
-            Value::Map(pairs) => pairs
+            BorrowedValue::Map(pairs) => pairs
                 .iter()
                 .find_map(|(k, val)| match k {
-                    Value::String(s) if s == key => Some(val),
+                    BorrowedValue::String(s) if s == key => Some(val),
                     _ => None,
                 })
                 .unwrap_or_else(|| panic!("missing key {key}")),
@@ -802,8 +802,8 @@ service:
 ";
         let pairs = map_pairs(parse(src));
         let service = &pairs[1].1;
-        assert!(matches!(get(service, "port"), Value::UInt(443)));
-        assert!(matches!(get(service, "host"), Value::String(s) if s == "localhost"));
+        assert!(matches!(get(service, "port"), BorrowedValue::UInt(443)));
+        assert!(matches!(get(service, "host"), BorrowedValue::String(s) if s == "localhost"));
         assert!(!keys_of(service).contains(&"<<".to_string()));
     }
 
@@ -818,7 +818,7 @@ target:
 ";
         let pairs = map_pairs(parse(src));
         let target = &pairs[1].1;
-        assert!(matches!(get(target, "shared"), Value::String(s) if s == "overridden"));
+        assert!(matches!(get(target, "shared"), BorrowedValue::String(s) if s == "overridden"));
     }
 
     #[test]
@@ -835,16 +835,16 @@ target:
         let pairs = map_pairs(parse(src));
         let target = &pairs[2].1;
         // left wins: a's k beats b's k
-        assert!(matches!(get(target, "k"), Value::String(s) if s == "from_a"));
+        assert!(matches!(get(target, "k"), BorrowedValue::String(s) if s == "from_a"));
         // b's extra still merges in since it's not in a
-        assert!(matches!(get(target, "extra"), Value::String(s) if s == "from_b"));
+        assert!(matches!(get(target, "extra"), BorrowedValue::String(s) if s == "from_b"));
     }
 
     #[test]
     fn merge_no_merge_key_untouched() {
         let pairs = map_pairs(parse("a: 1\nb: 2\n"));
         assert_eq!(pairs.len(), 2);
-        assert!(!pairs.iter().any(|(k, _)| matches!(k, Value::String(s) if s == "<<")));
+        assert!(!pairs.iter().any(|(k, _)| matches!(k, BorrowedValue::String(s) if s == "<<")));
     }
 
     #[test]
@@ -852,7 +852,7 @@ target:
         // <<: 42 is invalid; should be silently dropped
         let pairs = map_pairs(parse("k: v\n'<<': 42\n"));
         let keys: Vec<String> = pairs.iter().filter_map(|(k, _)| match k {
-            Value::String(s) => Some(s.to_string()),
+            BorrowedValue::String(s) => Some(s.to_string()),
             _ => None,
         }).collect();
         assert!(!keys.contains(&"<<".to_string()));
@@ -872,13 +872,13 @@ items:
 ";
         let pairs = map_pairs(parse(src));
         let items = match &pairs[1].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         for (i, item) in items.iter().enumerate() {
-            assert!(matches!(get(item, "shared"), Value::String(s) if s == "yes"));
+            assert!(matches!(get(item, "shared"), BorrowedValue::String(s) if s == "yes"));
             let own = match get(item, "own") {
-                Value::String(s) => s.as_ref(),
+                BorrowedValue::String(s) => s.as_ref(),
                 _ => panic!(),
             };
             assert_eq!(own, if i == 0 { "a" } else { "b" });
@@ -900,8 +900,8 @@ outer:
 ";
         let pairs = map_pairs(parse(src));
         let outer = &pairs[2].1;
-        assert!(matches!(get(outer, "k"), Value::String(s) if s == "v"));
-        assert!(matches!(get(outer, "z"), Value::String(s) if s == "from_other"));
+        assert!(matches!(get(outer, "k"), BorrowedValue::String(s) if s == "v"));
+        assert!(matches!(get(outer, "z"), BorrowedValue::String(s) if s == "from_other"));
         assert!(!keys_of(outer).contains(&"<<".to_string()));
     }
 
@@ -918,10 +918,10 @@ wrapped: !mytag
         let pairs = map_pairs(parse(src));
         let wrapped = &pairs[1].1;
         match wrapped {
-            Value::Tagged(tag, inner) => {
+            BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!mytag");
-                assert!(matches!(get(inner, "x"), Value::UInt(1)));
-                assert!(matches!(get(inner, "y"), Value::UInt(2)));
+                assert!(matches!(get(inner, "x"), BorrowedValue::UInt(1)));
+                assert!(matches!(get(inner, "y"), BorrowedValue::UInt(2)));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -932,14 +932,14 @@ wrapped: !mytag
     #[test]
     fn bom_stripped_simple() {
         let pairs = map_pairs(parse("\u{FEFF}a: 1\n"));
-        assert!(matches!(&pairs[0].0, Value::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, Value::UInt(1)));
+        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
     }
 
     #[test]
     fn bom_empty_stream() {
         let v = Parser::new("\u{FEFF}").parse().unwrap();
-        assert!(matches!(v, Value::Null));
+        assert!(matches!(v, BorrowedValue::Null));
     }
 
     #[test]
@@ -953,7 +953,7 @@ wrapped: !mytag
         // only LEADING BOM is stripped; in-content BOM stays as content
         let pairs = map_pairs(parse("key: \"a\u{FEFF}b\"\n"));
         let v = match &pairs[0].1 {
-            Value::String(s) => s.as_ref(),
+            BorrowedValue::String(s) => s.as_ref(),
             _ => panic!(),
         };
         assert_eq!(v, "a\u{FEFF}b");
@@ -980,8 +980,8 @@ services:
         let services = &pairs[1].1;
         let web = get(services, "web");
         let api = get(services, "api");
-        assert!(matches!(get(web, "image"), Value::String(s) if s == "nginx"));
-        assert!(matches!(get(web, "restart"), Value::String(s) if s == "always"));
-        assert!(matches!(get(api, "restart"), Value::String(s) if s == "on-failure")); // override
+        assert!(matches!(get(web, "image"), BorrowedValue::String(s) if s == "nginx"));
+        assert!(matches!(get(web, "restart"), BorrowedValue::String(s) if s == "always"));
+        assert!(matches!(get(api, "restart"), BorrowedValue::String(s) if s == "on-failure")); // override
     }
 }

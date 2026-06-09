@@ -56,58 +56,58 @@ fn compose_merge_keys_applied() {
     let value = tmyc::Parser::new(&src).parse().unwrap();
     // services.web should have `restart: always` from defaults
     let services = match &value {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "services" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "services" => Some(v),
                 _ => None,
             })
             .expect("services key"),
         _ => panic!("expected top-level map"),
     };
     let web = match services {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "web" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "web" => Some(v),
                 _ => None,
             })
             .expect("web key"),
         _ => panic!("expected services map"),
     };
     let web_pairs = match web {
-        tmyc::Value::Map(p) => p,
+        tmyc::BorrowedValue::Map(p) => p,
         _ => panic!(),
     };
     let restart = web_pairs.iter().find_map(|(k, v)| match k {
-        tmyc::Value::String(s) if s == "restart" => Some(v),
+        tmyc::BorrowedValue::String(s) if s == "restart" => Some(v),
         _ => None,
     });
     assert!(
-        matches!(restart, Some(tmyc::Value::String(s)) if s == "always"),
+        matches!(restart, Some(tmyc::BorrowedValue::String(s)) if s == "always"),
         "merge key didn't splice `restart: always` into web"
     );
     // api should have overridden restart to on-failure
     let api = match services {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "api" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "api" => Some(v),
                 _ => None,
             })
             .expect("api key"),
         _ => panic!(),
     };
     let api_pairs = match api {
-        tmyc::Value::Map(p) => p,
+        tmyc::BorrowedValue::Map(p) => p,
         _ => panic!(),
     };
     let api_restart = api_pairs.iter().find_map(|(k, v)| match k {
-        tmyc::Value::String(s) if s == "restart" => Some(v),
+        tmyc::BorrowedValue::String(s) if s == "restart" => Some(v),
         _ => None,
     });
     assert!(
-        matches!(api_restart, Some(tmyc::Value::String(s)) if s == "on-failure"),
+        matches!(api_restart, Some(tmyc::BorrowedValue::String(s)) if s == "on-failure"),
         "explicit api.restart should override merged-in value"
     );
 }
@@ -124,27 +124,27 @@ fn sops_secret_block_scalars_parse() {
     let src = fs::read_to_string(format!("{FIXTURES}/sops_secret.yaml")).unwrap();
     let value = tmyc::Parser::new(&src).parse().unwrap();
     let data = match &value {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "data" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "data" => Some(v),
                 _ => None,
             })
             .expect("data key"),
         _ => panic!(),
     };
     let cert = match data {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "cert" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "cert" => Some(v),
                 _ => None,
             })
             .expect("cert key"),
         _ => panic!(),
     };
     let cert_str = match cert {
-        tmyc::Value::String(s) => s.as_ref(),
+        tmyc::BorrowedValue::String(s) => s.as_ref(),
         _ => panic!("expected string cert"),
     };
     // Literal block: newlines preserved between lines
@@ -154,17 +154,17 @@ fn sops_secret_block_scalars_parse() {
 
     // Folded description: newlines folded to spaces
     let description = match data {
-        tmyc::Value::Map(pairs) => pairs
+        tmyc::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::Value::String(s) if s == "description" => Some(v),
+                tmyc::BorrowedValue::String(s) if s == "description" => Some(v),
                 _ => None,
             })
             .expect("description key"),
         _ => panic!(),
     };
     let desc_str = match description {
-        tmyc::Value::String(s) => s.as_ref(),
+        tmyc::BorrowedValue::String(s) => s.as_ref(),
         _ => panic!(),
     };
     assert!(desc_str.contains("spans multiple lines but joins them"));

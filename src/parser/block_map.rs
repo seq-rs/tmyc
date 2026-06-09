@@ -1,4 +1,4 @@
-use crate::{Parser, Result, Value};
+use crate::{Parser, Result, BorrowedValue};
 
 impl<'a> Parser<'a> {
     /// Parse a scalar OR an implicit-key block map starting with that scalar
@@ -9,11 +9,11 @@ impl<'a> Parser<'a> {
     /// b: 2
     /// ```
     ///
-    /// Output: `Value::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
+    /// Output: `BorrowedValue::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
     ///
-    /// Input: `foo\n` → Output: `Value::String("foo")` (no `:` follows the
+    /// Input: `foo\n` → Output: `BorrowedValue::String("foo")` (no `:` follows the
     /// first token, so it's a bare scalar).
-    pub(super) fn parse_scalar_or_map(&mut self, indent: usize) -> Result<Value<'a>> {
+    pub(super) fn parse_scalar_or_map(&mut self, indent: usize) -> Result<BorrowedValue<'a>> {
         let first = self.parse_scalar_token()?;
 
         self.skip_spaces();
@@ -28,7 +28,7 @@ impl<'a> Parser<'a> {
         let mut pairs = vec![(first, value)];
 
         self.parse_block_map_rest(indent, &mut pairs)?;
-        Ok(Value::Map(pairs))
+        Ok(BorrowedValue::Map(pairs))
     }
 
     /// Continue parsing remaining `k: v` pairs at the given indent
@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_block_map_rest(
         &mut self,
         indent: usize,
-        pairs: &mut Vec<(Value<'a>, Value<'a>)>,
+        pairs: &mut Vec<(BorrowedValue<'a>, BorrowedValue<'a>)>,
     ) -> Result<()> {
         loop {
             self.skip_blank_and_comment_lines();
@@ -94,12 +94,12 @@ impl<'a> Parser<'a> {
     ///   - b
     /// ```
     ///
-    /// Output: `Value::Seq([String("a"), String("b")])`.
+    /// Output: `BorrowedValue::Seq([String("a"), String("b")])`.
     ///
     /// Inline values (same line as the key) parse via `parse_node`.
     /// Multi-line values handle indent locally to support the compact-seq
     /// form (`key:\n- item`) where the dash sits at the parent's indent.
-    pub(super) fn parse_block_map_value(&mut self, parent_indent: usize) -> Result<Value<'a>> {
+    pub(super) fn parse_block_map_value(&mut self, parent_indent: usize) -> Result<BorrowedValue<'a>> {
         self.skip_spaces();
 
         // Inline value (same line as key): cursor at value byte
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
         self.skip_blank_and_comment_lines();
 
         if self.at_eof() {
-            return Ok(Value::Null);
+            return Ok(BorrowedValue::Null);
         }
 
         let next_indent = self.current_indent()?;
@@ -133,11 +133,11 @@ impl<'a> Parser<'a> {
             }
 
             // Same indent, not a dash: value is empty (next line sibling)
-            return Ok(Value::Null);
+            return Ok(BorrowedValue::Null);
         }
 
         if next_indent < parent_indent + 1 {
-            return Ok(Value::Null);
+            return Ok(BorrowedValue::Null);
         }
 
         for _ in 0..next_indent {
@@ -164,21 +164,21 @@ mod tests {
             let mut p = Parser::new($yaml);
             let v = p.parse_node(0).unwrap();
             match v {
-                Value::Map(pairs) => {
+                BorrowedValue::Map(pairs) => {
                     let kvs: Vec<(&str, String)> = pairs
                         .iter()
                         .map(|(k, v)| {
                             let k_str = match k {
-                                Value::String(s) => s.as_ref(),
+                                BorrowedValue::String(s) => s.as_ref(),
                                 _ => panic!("non-string key"),
                             };
                             let v_str = match v {
-                                Value::String(s) => s.to_string(),
-                                Value::Null => "<null>".to_string(),
-                                Value::Bool(b) => b.to_string(),
-                                Value::Int(n) => n.to_string(),
-                                Value::UInt(n) => n.to_string(),
-                                Value::Float(f) => f.to_string(),
+                                BorrowedValue::String(s) => s.to_string(),
+                                BorrowedValue::Null => "<null>".to_string(),
+                                BorrowedValue::Bool(b) => b.to_string(),
+                                BorrowedValue::Int(n) => n.to_string(),
+                                BorrowedValue::UInt(n) => n.to_string(),
+                                BorrowedValue::Float(f) => f.to_string(),
                                 _ => panic!("nested container value, use a different assertion"),
                             };
                             (k_str, v_str)
@@ -250,13 +250,13 @@ mod tests {
         let mut p = Parser::new("a:\n  x: 1\n  y: 2\n");
         let v = p.parse_node(0).unwrap();
         let outer = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(outer.len(), 1);
         let (_, inner) = &outer[0];
         let inner_pairs = match inner {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(inner_pairs.len(), 2);
@@ -268,11 +268,11 @@ mod tests {
         let v = p.parse_node(0).unwrap();
         // items has Map([("items", Seq(["a", "b"]))])
         let pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         let items = match &pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(items.len(), 2);
@@ -285,12 +285,12 @@ mod tests {
         let mut p = Parser::new("- name: a\n- name: b\n");
         let v = p.parse_node(0).unwrap();
         let items = match v {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(items.len(), 2);
         let first = match &items[0] {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!("expected map item"),
         };
         assert_eq!(first.len(), 1);
@@ -302,11 +302,11 @@ mod tests {
         let mut p = Parser::new("items:\n- a\n- b\n");
         let v = p.parse_node(0).unwrap();
         let pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         let items = match &pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!("expected compact seq"),
         };
         assert_eq!(items.len(), 2);
@@ -318,17 +318,17 @@ mod tests {
         let mut p = Parser::new("items:\n- a\n- b\nnext: x\n");
         let v = p.parse_node(0).unwrap();
         let pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(pairs.len(), 2);
         let items = match &pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(items.len(), 2);
         let next = match &pairs[1].1 {
-            Value::String(s) => s.as_ref(),
+            BorrowedValue::String(s) => s.as_ref(),
             _ => panic!(),
         };
         assert_eq!(next, "x");
@@ -341,16 +341,16 @@ mod tests {
         let mut p = Parser::new("outer:\n- item: a\n  more: 1\n- item: b\n");
         let v = p.parse_node(0).unwrap();
         let outer_pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         let seq = match &outer_pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(seq.len(), 2);
         let first = match &seq[0] {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(first.len(), 2);
@@ -362,11 +362,11 @@ mod tests {
         let mut p = Parser::new("items:\n  - a\n  - b\n");
         let v = p.parse_node(0).unwrap();
         let pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         let items = match &pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(items.len(), 2);
@@ -379,10 +379,10 @@ mod tests {
         let mut p = Parser::new("key:\nnext: x\n");
         let v = p.parse_node(0).unwrap();
         let pairs = match v {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(pairs.len(), 2);
-        assert!(matches!(pairs[0].1, Value::Null));
+        assert!(matches!(pairs[0].1, BorrowedValue::Null));
     }
 }

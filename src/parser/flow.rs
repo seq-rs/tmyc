@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    Parser, Result, Value,
+    Parser, Result, BorrowedValue,
     patterns::resolve_scalar,
     value::apply_tag,
 };
@@ -9,11 +9,11 @@ use crate::{
 impl<'a> Parser<'a> {
     /// Parse a flow-style sequence
     ///
-    /// Input: `[1, 2, 3]` → Output: `Value::Seq([UInt(1), UInt(2), UInt(3)])`
+    /// Input: `[1, 2, 3]` → Output: `BorrowedValue::Seq([UInt(1), UInt(2), UInt(3)])`
     ///
     /// Cursor enters at `[`. Skips whitespace/newlines/comments between
     /// tokens. Empty (`[]`) and trailing-comma (`[a,]`) forms are legal.
-    pub(super) fn parse_flow_seq(&mut self) -> Result<Value<'a>> {
+    pub(super) fn parse_flow_seq(&mut self) -> Result<BorrowedValue<'a>> {
         self.advance(); // consume '['
 
         let mut items = Vec::new();
@@ -47,17 +47,17 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Value::Seq(items))
+        Ok(BorrowedValue::Seq(items))
     }
 
     /// Parse a flow-style mapping
     ///
-    /// Input: `{a: 1, b: 2}` → Output: `Value::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
+    /// Input: `{a: 1, b: 2}` → Output: `BorrowedValue::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
     ///
     /// Cursor enters at `{`. Supports JSON-style `{"a":1}` and spaceless
     /// `{a:1}` per spec §7.5.3 (plain scalars in flow can't end with `:`).
     /// Pair shorthand (`{a, b}`) yields null values.
-    pub(super) fn parse_flow_map(&mut self) -> Result<Value<'a>> {
+    pub(super) fn parse_flow_map(&mut self) -> Result<BorrowedValue<'a>> {
         self.advance(); // consume '{'
         let mut pairs = Vec::new();
 
@@ -80,11 +80,11 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.skip_flow_whitespace();
                 match self.peek() {
-                    Some(b',' | b'}') | None => Value::Null,
+                    Some(b',' | b'}') | None => BorrowedValue::Null,
                     _ => self.parse_flow_node()?,
                 }
             } else {
-                Value::Null // implicit null value, like {a, b}
+                BorrowedValue::Null // implicit null value, like {a, b}
             };
 
             pairs.push((key, value));
@@ -101,17 +101,17 @@ impl<'a> Parser<'a> {
                 Some(_) => return Err(self.err("expected ',' or '}' in flow map")),
             }
         }
-        Ok(Value::Map(pairs))
+        Ok(BorrowedValue::Map(pairs))
     }
 
     /// Parse one node in flow context (scalar, nested flow, alias, optionally tagged/anchored)
     ///
-    /// Input: `*ref` → Output: `Value::String(...)` (alias resolved from anchors map)
+    /// Input: `*ref` → Output: `BorrowedValue::String(...)` (alias resolved from anchors map)
     ///
     /// Unlike `parse_node`, this never recurses into block-style parsers —
     /// flow context is closed per spec. Tag/anchor prefixes are accepted in
     /// either order, just like block context.
-    fn parse_flow_node(&mut self) -> Result<Value<'a>> {
+    fn parse_flow_node(&mut self) -> Result<BorrowedValue<'a>> {
         let mut tag: Option<Cow<'a, str>> = None;
         let mut anchor: Option<&'a str> = None;
 
@@ -141,10 +141,10 @@ impl<'a> Parser<'a> {
         let value = match self.peek() {
             Some(b'[') => self.parse_flow_seq()?,
             Some(b'{') => self.parse_flow_map()?,
-            Some(b'"') => Value::String(self.parse_double_quoted(self.col.saturating_sub(1))?),
-            Some(b'\'') => Value::String(self.parse_single_quoted(self.col.saturating_sub(1))?),
+            Some(b'"') => BorrowedValue::String(self.parse_double_quoted(self.col.saturating_sub(1))?),
+            Some(b'\'') => BorrowedValue::String(self.parse_single_quoted(self.col.saturating_sub(1))?),
             Some(b'*') => self.parse_alias()?,
-            Some(b',' | b']' | b'}') | None => Value::Null,
+            Some(b',' | b']' | b'}') | None => BorrowedValue::Null,
             _ => {
                 let s = self.parse_plain_scalar(true);
                 resolve_scalar(s)
@@ -168,20 +168,20 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    fn parse(src: &str) -> Value<'_> {
+    fn parse(src: &str) -> BorrowedValue<'_> {
         Parser::new(src).parse_node(0).unwrap()
     }
 
-    fn as_seq(v: Value<'_>) -> Vec<Value<'_>> {
+    fn as_seq(v: BorrowedValue<'_>) -> Vec<BorrowedValue<'_>> {
         match v {
-            Value::Seq(items) => items,
+            BorrowedValue::Seq(items) => items,
             other => panic!("expected Seq, got {other:?}"),
         }
     }
 
-    fn as_map(v: Value<'_>) -> Vec<(Value<'_>, Value<'_>)> {
+    fn as_map(v: BorrowedValue<'_>) -> Vec<(BorrowedValue<'_>, BorrowedValue<'_>)> {
         match v {
-            Value::Map(pairs) => pairs,
+            BorrowedValue::Map(pairs) => pairs,
             other => panic!("expected Map, got {other:?}"),
         }
     }
@@ -197,7 +197,7 @@ mod tests {
     fn flow_seq_simple_strings() {
         let items = as_seq(parse("[a, b, c]\n"));
         let strs: Vec<&str> = items.iter().map(|v| match v {
-            Value::String(s) => s.as_ref(),
+            BorrowedValue::String(s) => s.as_ref(),
             _ => panic!(),
         }).collect();
         assert_eq!(strs, vec!["a", "b", "c"]);
@@ -206,9 +206,9 @@ mod tests {
     #[test]
     fn flow_seq_ints() {
         let items = as_seq(parse("[1, 2, 3]\n"));
-        assert!(matches!(&items[0], Value::UInt(1)));
-        assert!(matches!(&items[1], Value::UInt(2)));
-        assert!(matches!(&items[2], Value::UInt(3)));
+        assert!(matches!(&items[0], BorrowedValue::UInt(1)));
+        assert!(matches!(&items[1], BorrowedValue::UInt(2)));
+        assert!(matches!(&items[2], BorrowedValue::UInt(3)));
     }
 
     #[test]
@@ -219,20 +219,20 @@ mod tests {
     #[test]
     fn flow_seq_quoted_items() {
         let items = as_seq(parse("[\"a b\", 'c d']\n"));
-        assert!(matches!(&items[0], Value::String(s) if s == "a b"));
-        assert!(matches!(&items[1], Value::String(s) if s == "c d"));
+        assert!(matches!(&items[0], BorrowedValue::String(s) if s == "a b"));
+        assert!(matches!(&items[1], BorrowedValue::String(s) if s == "c d"));
     }
 
     #[test]
     fn flow_seq_nested() {
         let items = as_seq(parse("[[1, 2], [3]]\n"));
         let inner0 = match &items[0] {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(inner0.len(), 2);
         let inner1 = match &items[1] {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(inner1.len(), 1);
@@ -253,19 +253,19 @@ mod tests {
     fn flow_seq_with_comment() {
         let items = as_seq(parse("[a, # ignored\n  b]\n"));
         assert_eq!(items.len(), 2);
-        assert!(matches!(&items[0], Value::String(s) if s == "a"));
-        assert!(matches!(&items[1], Value::String(s) if s == "b"));
+        assert!(matches!(&items[0], BorrowedValue::String(s) if s == "a"));
+        assert!(matches!(&items[1], BorrowedValue::String(s) if s == "b"));
     }
 
     #[test]
     fn flow_seq_with_alias() {
         let pairs = as_map(parse("defs: &x 7\nitems: [*x, *x]\n"));
         let items = match &pairs[1].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
-        assert!(matches!(&items[0], Value::UInt(7)));
-        assert!(matches!(&items[1], Value::UInt(7)));
+        assert!(matches!(&items[0], BorrowedValue::UInt(7)));
+        assert!(matches!(&items[1], BorrowedValue::UInt(7)));
     }
 
     // flow map
@@ -278,48 +278,48 @@ mod tests {
     #[test]
     fn flow_map_simple() {
         let pairs = as_map(parse("{a: 1, b: 2}\n"));
-        assert!(matches!(&pairs[0].0, Value::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, Value::UInt(1)));
-        assert!(matches!(&pairs[1].0, Value::String(s) if s == "b"));
-        assert!(matches!(&pairs[1].1, Value::UInt(2)));
+        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[1].0, BorrowedValue::String(s) if s == "b"));
+        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
     }
 
     #[test]
     fn flow_map_quoted_keys() {
         let pairs = as_map(parse("{\"k 1\": 1}\n"));
-        assert!(matches!(&pairs[0].0, Value::String(s) if s == "k 1"));
-        assert!(matches!(&pairs[0].1, Value::UInt(1)));
+        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "k 1"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
     }
 
     #[test]
     fn flow_map_json_style_quoted_key() {
         let pairs = as_map(parse("{\"a\":1}\n"));
-        assert!(matches!(&pairs[0].0, Value::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, Value::UInt(1)));
+        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
     }
 
     #[test]
     fn flow_map_colon_no_space() {
         let pairs = as_map(parse("{a:1, b:2}\n"));
-        assert!(matches!(&pairs[0].0, Value::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, Value::UInt(1)));
-        assert!(matches!(&pairs[1].0, Value::String(s) if s == "b"));
-        assert!(matches!(&pairs[1].1, Value::UInt(2)));
+        assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
+        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[1].0, BorrowedValue::String(s) if s == "b"));
+        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
     }
 
     #[test]
     fn flow_map_implicit_null_value() {
         let pairs = as_map(parse("{a:, b: 2}\n"));
-        assert!(matches!(&pairs[0].1, Value::Null));
-        assert!(matches!(&pairs[1].1, Value::UInt(2)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Null));
+        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
     }
 
     #[test]
     fn flow_pair_shorthand() {
         let pairs = as_map(parse("{a, b}\n"));
         assert_eq!(pairs.len(), 2);
-        assert!(matches!(&pairs[0].1, Value::Null));
-        assert!(matches!(&pairs[1].1, Value::Null));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Null));
+        assert!(matches!(&pairs[1].1, BorrowedValue::Null));
     }
 
     #[test]
@@ -346,7 +346,7 @@ mod tests {
         let items = as_seq(parse("[{a: 1}, {b: 2}]\n"));
         assert_eq!(items.len(), 2);
         let first = match &items[0] {
-            Value::Map(p) => p,
+            BorrowedValue::Map(p) => p,
             _ => panic!(),
         };
         assert_eq!(first.len(), 1);
@@ -357,10 +357,10 @@ mod tests {
         let pairs = as_map(parse("items: [a, b]\nname: x\n"));
         assert_eq!(pairs.len(), 2);
         let items = match &pairs[0].1 {
-            Value::Seq(s) => s,
+            BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
         assert_eq!(items.len(), 2);
-        assert!(matches!(&pairs[1].1, Value::String(s) if s == "x"));
+        assert!(matches!(&pairs[1].1, BorrowedValue::String(s) if s == "x"));
     }
 }

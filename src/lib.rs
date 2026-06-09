@@ -30,20 +30,20 @@
 //! | Function | Purpose |
 //! |---|---|
 //! | [`from_str`]    | Deserialize a single document into `T: DeserializeOwned`. |
-//! | [`from_value`]  | Deserialize from a pre-parsed [`Value`], supporting zero-copy borrows. |
+//! | [`from_value`]  | Deserialize from a pre-parsed [`BorrowedValue`], supporting zero-copy borrows. |
 //! | [`to_string`]   | Serialize `T: Serialize` to a YAML string. |
-//! | [`to_value`]    | Serialize `T: Serialize` to a [`Value`] (for inspection or post-processing). |
+//! | [`to_value`]    | Serialize `T: Serialize` to a [`BorrowedValue`] (for inspection or post-processing). |
 //! | [`Parser`]      | Manual parsing API. Use [`Parser::parse_all`] for multi-document streams. |
 //!
 //! ## Why `DeserializeOwned` for [`from_str`]?
 //!
-//! [`from_str`] builds an intermediate [`Value`] that lives only for the call.
-//! If your target type held borrowed `&str` fields they'd reference a Value
+//! [`from_str`] builds an intermediate [`BorrowedValue`] that lives only for the call.
+//! If your target type held borrowed `&str` fields they'd reference a BorrowedValue
 //! that's already been dropped — unsound. The [`serde::de::DeserializeOwned`]
 //! bound rules out borrowed fields at compile time.
 //!
 //! To get the zero-copy payoff (struct fields that are `&str` slices of the
-//! input), keep a [`Value`] alive yourself and use [`from_value`]:
+//! input), keep a [`BorrowedValue`] alive yourself and use [`from_value`]:
 //!
 //! ```
 //! use serde::Deserialize;
@@ -79,7 +79,7 @@
 //! - Block and flow scalars (literal `|`, folded `>`, plain, single/double quoted)
 //! - Block and flow containers (sequences and mappings)
 //! - Standard tags (`!!str`, `!!int`, `!!float`, `!!bool`, `!!null`) with coercion
-//! - Custom tags preserved via [`Value::Tagged`]
+//! - Custom tags preserved via [`BorrowedValue::Tagged`]
 //! - Anchors (`&name`) and aliases (`*name`), document-scoped per spec
 //! - Multi-document streams (`---`/`...`)
 //! - UTF-8 BOM and leading directives (`%YAML`/`%TAG`) tolerated
@@ -113,7 +113,7 @@ pub use de::{from_str, from_value};
 pub use error::{Error, Result};
 pub use parser::Parser;
 pub use ser::to_value;
-pub use value::Value;
+pub use value::BorrowedValue;
 
 /// Serialize `T` to a YAML string.
 ///

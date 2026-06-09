@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
-use crate::{Error, Value};
+use crate::{Error, BorrowedValue};
 
 pub struct ValueSerializer;
-use Value::*;
+use BorrowedValue::*;
 use serde::{Serialize, ser::Error as _};
 
 impl serde::Serializer for ValueSerializer {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type SerializeSeq = SerializeSeqImpl;
     type SerializeMap = SerializeMapImpl;
     type SerializeStruct = SerializeMapImpl;
@@ -74,7 +74,7 @@ impl serde::Serializer for ValueSerializer {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Null)
+        Ok(BorrowedValue::Null)
     }
 
     fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
@@ -85,11 +85,11 @@ impl serde::Serializer for ValueSerializer {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Null)
+        Ok(BorrowedValue::Null)
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Null)
+        Ok(BorrowedValue::Null)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -198,10 +198,10 @@ impl serde::Serializer for ValueSerializer {
     }
 }
 
-pub struct SerializeSeqImpl(Vec<Value<'static>>);
+pub struct SerializeSeqImpl(Vec<BorrowedValue<'static>>);
 
 impl serde::ser::SerializeSeq for SerializeSeqImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -213,12 +213,12 @@ impl serde::ser::SerializeSeq for SerializeSeqImpl {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Seq(self.0))
+        Ok(BorrowedValue::Seq(self.0))
     }
 }
 
 impl serde::ser::SerializeTuple for SerializeSeqImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -230,12 +230,12 @@ impl serde::ser::SerializeTuple for SerializeSeqImpl {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Seq(self.0))
+        Ok(BorrowedValue::Seq(self.0))
     }
 }
 
 impl serde::ser::SerializeTupleStruct for SerializeSeqImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -247,17 +247,17 @@ impl serde::ser::SerializeTupleStruct for SerializeSeqImpl {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Seq(self.0))
+        Ok(BorrowedValue::Seq(self.0))
     }
 }
 
 pub struct SerializeTupleVariantImpl {
     variant: &'static str,
-    items: Vec<Value<'static>>,
+    items: Vec<BorrowedValue<'static>>,
 }
 
 impl serde::ser::SerializeTupleVariant for SerializeTupleVariantImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -278,12 +278,12 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariantImpl {
 }
 
 pub struct SerializeMapImpl {
-    pairs: Vec<(Value<'static>, Value<'static>)>,
-    pending_key: Option<Value<'static>>,
+    pairs: Vec<(BorrowedValue<'static>, BorrowedValue<'static>)>,
+    pending_key: Option<BorrowedValue<'static>>,
 }
 
 impl serde::ser::SerializeMap for SerializeMapImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
     where
@@ -311,7 +311,7 @@ impl serde::ser::SerializeMap for SerializeMapImpl {
 }
 
 impl serde::ser::SerializeStruct for SerializeMapImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
@@ -324,17 +324,17 @@ impl serde::ser::SerializeStruct for SerializeMapImpl {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Map(self.pairs))
+        Ok(BorrowedValue::Map(self.pairs))
     }
 }
 
 pub struct SerializeStructVariantImpl {
     variant: &'static str,
-    pairs: Vec<(Value<'static>, Value<'static>)>,
+    pairs: Vec<(BorrowedValue<'static>, BorrowedValue<'static>)>,
 }
 
 impl serde::ser::SerializeStructVariant for SerializeStructVariantImpl {
-    type Ok = Value<'static>;
+    type Ok = BorrowedValue<'static>;
     type Error = Error;
 
     fn skip_field(&mut self, _key: &'static str) -> Result<(), Self::Error> {
@@ -360,24 +360,24 @@ impl serde::ser::SerializeStructVariant for SerializeStructVariantImpl {
     }
 }
 
-/// Serialize a value to a [`Value`].
+/// Serialize a value to a [`BorrowedValue`].
 ///
 /// This is the low-level entry point — use [`to_string`](crate::to_string)
-/// for a complete YAML string. Returning a `Value` first is useful for
+/// for a complete YAML string. Returning a `BorrowedValue` first is useful for
 /// inspection or transformation before emission.
 ///
 /// # Example
 ///
 /// ```
 /// use serde::Serialize;
-/// use tmyc::{to_value, Value};
+/// use tmyc::{to_value, BorrowedValue};
 ///
 /// #[derive(Serialize)]
 /// struct Point { x: i32, y: i32 }
 ///
 /// let v = to_value(&Point { x: 1, y: 2 }).unwrap();
-/// assert!(matches!(v, Value::Map(_)));
+/// assert!(matches!(v, BorrowedValue::Map(_)));
 /// ```
-pub fn to_value<T: ?Sized + Serialize>(v: &T) -> crate::Result<Value<'static>> {
+pub fn to_value<T: ?Sized + Serialize>(v: &T) -> crate::Result<BorrowedValue<'static>> {
     v.serialize(ValueSerializer)
 }

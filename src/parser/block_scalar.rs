@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{Parser, Result, Value, parser::line_end};
+use crate::{Parser, Result, BorrowedValue, parser::line_end};
 
 #[derive(Clone, Copy)]
 enum Chomp {
@@ -27,13 +27,13 @@ impl<'a> Parser<'a> {
     ///   line two
     /// ```
     ///
-    /// Output (called on the value): `Value::String(Cow::Owned("line one\nline two\n"))`
+    /// Output (called on the value): `BorrowedValue::String(Cow::Owned("line one\nline two\n"))`
     ///
     /// `parent_indent` is the indent of the line containing `|`. Content
     /// indent is auto-detected from the first non-blank line (or set
     /// explicitly via `|N` where N is 1-9). Chomping: `-` strip all trailing
     /// newlines, `+` keep all, default (clip) keeps one.
-    pub(super) fn parse_block_scalar(&mut self) -> Result<Value<'a>> {
+    pub(super) fn parse_block_scalar(&mut self) -> Result<BorrowedValue<'a>> {
         let style = match self.peek() {
             Some(b'|') => Style::Literal,
             Some(b'>') => Style::Folded,
@@ -175,7 +175,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(Value::String(Cow::Owned(buf)))
+        Ok(BorrowedValue::String(Cow::Owned(buf)))
     }
 
     /// Leading-space count of the line the cursor is currently on
@@ -238,8 +238,8 @@ mod tests {
     fn parse_block(src: &str) -> String {
         let v = Parser::new(src).parse_node(0).unwrap();
         match v {
-            Value::Map(pairs) => match &pairs[0].1 {
-                Value::String(s) => s.to_string(),
+            BorrowedValue::Map(pairs) => match &pairs[0].1 {
+                BorrowedValue::String(s) => s.to_string(),
                 other => panic!("expected String value, got {other:?}"),
             },
             other => panic!("expected Map, got {other:?}"),
@@ -276,11 +276,11 @@ mod tests {
         let src = "k: |\n  a\n  b\nnext: v\n";
         let v = Parser::new(src).parse_node(0).unwrap();
         match v {
-            Value::Map(pairs) => {
+            BorrowedValue::Map(pairs) => {
                 assert_eq!(pairs.len(), 2);
-                assert!(matches!(&pairs[0].1, Value::String(s) if s == "a\nb\n"));
-                assert!(matches!(&pairs[1].0, Value::String(s) if s == "next"));
-                assert!(matches!(&pairs[1].1, Value::String(s) if s == "v"));
+                assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "a\nb\n"));
+                assert!(matches!(&pairs[1].0, BorrowedValue::String(s) if s == "next"));
+                assert!(matches!(&pairs[1].1, BorrowedValue::String(s) if s == "v"));
             }
             other => panic!("expected Map, got {other:?}"),
         }
@@ -306,9 +306,9 @@ mod tests {
         let src = "k: |-\nnext: v\n";
         let v = Parser::new(src).parse_node(0).unwrap();
         match v {
-            Value::Map(pairs) => {
+            BorrowedValue::Map(pairs) => {
                 assert_eq!(pairs.len(), 2);
-                assert!(matches!(&pairs[0].1, Value::String(s) if s.is_empty()));
+                assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s.is_empty()));
             }
             other => panic!("expected Map, got {other:?}"),
         }
@@ -406,9 +406,9 @@ data: |
         let src = "k: >-\nnext: v\n";
         let v = Parser::new(src).parse_node(0).unwrap();
         match v {
-            Value::Map(pairs) => {
+            BorrowedValue::Map(pairs) => {
                 assert_eq!(pairs.len(), 2);
-                assert!(matches!(&pairs[0].1, Value::String(s) if s.is_empty()));
+                assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s.is_empty()));
             }
             other => panic!("expected Map, got {other:?}"),
         }

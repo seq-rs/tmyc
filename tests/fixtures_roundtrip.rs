@@ -3,12 +3,12 @@
 //! The "acceptance bar" from `tmyc-76k`: confirm that the data survives a
 //! full roundtrip through the public API. Presentation details may shift
 //! (folded blocks become literal, anchors get expanded), but the
-//! resulting [`tmyc::Value`] must be structurally equal between the
+//! resulting [`tmyc::BorrowedValue`] must be structurally equal between the
 //! first and second parse.
 
 use std::fs;
 
-use tmyc::{Parser, Value};
+use tmyc::{Parser, BorrowedValue};
 
 const FIXTURES: &str = "tests/fixtures";
 
@@ -66,15 +66,15 @@ fn kubectl_stream_per_doc_roundtrips() {
 
 #[test]
 fn value_construct_emit_parse_matches() {
-    // Construct a Value by hand, emit, parse — confirm Value: Serialize
+    // Construct a BorrowedValue by hand, emit, parse — confirm BorrowedValue: Serialize
     // produces the same shape that the parser would build from equivalent YAML.
     use std::borrow::Cow;
-    let constructed = Value::Map(vec![
+    let constructed = BorrowedValue::Map(vec![
         (
-            Value::String(Cow::Borrowed("name")),
-            Value::String(Cow::Borrowed("test")),
+            BorrowedValue::String(Cow::Borrowed("name")),
+            BorrowedValue::String(Cow::Borrowed("test")),
         ),
-        (Value::String(Cow::Borrowed("count")), Value::UInt(42)),
+        (BorrowedValue::String(Cow::Borrowed("count")), BorrowedValue::UInt(42)),
     ]);
     let emitted = tmyc::to_string(&constructed).unwrap();
     let reparsed = Parser::new(&emitted).parse().unwrap();
@@ -87,5 +87,5 @@ fn empty_doc_roundtrip() {
     let emitted = tmyc::to_string(&first).unwrap();
     let second = Parser::new(&emitted).parse().unwrap();
     assert_eq!(first, second);
-    assert!(matches!(first, Value::Null));
+    assert!(matches!(first, BorrowedValue::Null));
 }

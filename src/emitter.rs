@@ -1,11 +1,11 @@
 use crate::Result;
-use crate::Value;
+use crate::BorrowedValue;
 use crate::patterns::has_ctrl_chars;
 use crate::patterns::has_newline;
 use crate::patterns::needs_quotes;
 use std::fmt::Write;
 
-pub fn emit(v: &Value<'_>) -> Result<String> {
+pub fn emit(v: &BorrowedValue<'_>) -> Result<String> {
     let mut out = String::new();
     emit_node(v, 0, &mut out)?;
     if out.starts_with('\n') {
@@ -18,23 +18,23 @@ pub fn emit(v: &Value<'_>) -> Result<String> {
     Ok(out)
 }
 
-fn emit_node(v: &Value<'_>, indent: usize, out: &mut String) -> Result<()> {
+fn emit_node(v: &BorrowedValue<'_>, indent: usize, out: &mut String) -> Result<()> {
     match v {
-        Value::Null => emit_null(out),
-        Value::Bool(b) => emit_bool(*b, out),
-        Value::Int(n) => emit_int(n, out),
-        Value::UInt(n) => emit_uint(n, out),
-        Value::Float(f) => emit_float(f, out),
-        Value::String(s) => emit_scalar(s, indent, out),
-        Value::Tagged(tag, v) => {
+        BorrowedValue::Null => emit_null(out),
+        BorrowedValue::Bool(b) => emit_bool(*b, out),
+        BorrowedValue::Int(n) => emit_int(n, out),
+        BorrowedValue::UInt(n) => emit_uint(n, out),
+        BorrowedValue::Float(f) => emit_float(f, out),
+        BorrowedValue::String(s) => emit_scalar(s, indent, out),
+        BorrowedValue::Tagged(tag, v) => {
             out.push_str(tag);
             if is_inline(v) {
                 out.push(' ');
             }
             emit_node(v, indent, out)?;
         }
-        Value::Seq(items) => emit_block_seq(items, indent, out)?,
-        Value::Map(pairs) => emit_block_map(pairs, indent, out)?,
+        BorrowedValue::Seq(items) => emit_block_seq(items, indent, out)?,
+        BorrowedValue::Map(pairs) => emit_block_map(pairs, indent, out)?,
     }
     Ok(())
 }
@@ -130,22 +130,7 @@ fn emit_double_quoted(s: &str, out: &mut String) {
     out.push('"');
 }
 
-// fn emit_block_seq(items: &[Value<'_>], indent: usize, out: &mut String) -> Result<()> {
-//     if items.is_empty() {
-//         out.push('[');
-//         out.push(']');
-//         return Ok(());
-//     }
-//     for item in items {
-//         out.push('\n');
-//         push_indent(out, indent);
-//         push_block_prefix(out);
-//         emit_node(item, indent + 2, out)?;
-//     }
-//     Ok(())
-// }
-
-fn emit_block_seq(items: &[Value<'_>], indent: usize, out: &mut String) -> Result<()> {
+fn emit_block_seq(items: &[BorrowedValue<'_>], indent: usize, out: &mut String) -> Result<()> {
     if items.is_empty() {
         out.push_str("[]");
         return Ok(());
@@ -155,7 +140,7 @@ fn emit_block_seq(items: &[Value<'_>], indent: usize, out: &mut String) -> Resul
         push_indent(out, indent);
         push_block_prefix(out);
         match item {
-            Value::Map(pairs) if !pairs.is_empty() => {
+            BorrowedValue::Map(pairs) if !pairs.is_empty() => {
                 emit_kv(&pairs[0], indent + 2, out)?;
                 for kv in &pairs[1..] {
                     out.push('\n');
@@ -169,7 +154,7 @@ fn emit_block_seq(items: &[Value<'_>], indent: usize, out: &mut String) -> Resul
     Ok(())
 }
 
-fn emit_block_map(pairs: &[(Value<'_>, Value<'_>)], indent: usize, out: &mut String) -> Result<()> {
+fn emit_block_map(pairs: &[(BorrowedValue<'_>, BorrowedValue<'_>)], indent: usize, out: &mut String) -> Result<()> {
     if pairs.is_empty() {
         out.push('{');
         out.push('}');
@@ -183,7 +168,7 @@ fn emit_block_map(pairs: &[(Value<'_>, Value<'_>)], indent: usize, out: &mut Str
     Ok(())
 }
 
-fn emit_kv(kv: &(Value<'_>, Value<'_>), indent: usize, out: &mut String) -> Result<()> {
+fn emit_kv(kv: &(BorrowedValue<'_>, BorrowedValue<'_>), indent: usize, out: &mut String) -> Result<()> {
     let (k, v) = kv;
     emit_node(k, indent, out)?;
     out.push(':');
@@ -203,11 +188,11 @@ fn push_block_prefix(out: &mut String) {
     out.push(' ');
 }
 
-fn is_inline(v: &Value<'_>) -> bool {
+fn is_inline(v: &BorrowedValue<'_>) -> bool {
     match v {
-        Value::Seq(items) if !items.is_empty() => false,
-        Value::Map(items) if !items.is_empty() => false,
-        Value::Tagged(_, value) => is_inline(value),
+        BorrowedValue::Seq(items) if !items.is_empty() => false,
+        BorrowedValue::Map(items) if !items.is_empty() => false,
+        BorrowedValue::Tagged(_, value) => is_inline(value),
         _ => true,
     }
 }

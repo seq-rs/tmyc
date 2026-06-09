@@ -2,9 +2,9 @@ use std::borrow::Cow;
 
 use serde::{Deserialize, de::{DeserializeOwned, Error as _, IntoDeserializer, VariantAccess}};
 
-use crate::{Error, Parser, Value};
+use crate::{Error, Parser, BorrowedValue};
 
-impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
+impl<'de> serde::de::Deserializer<'de> for &'de BorrowedValue<'de> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -12,17 +12,17 @@ impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
         V: serde::de::Visitor<'de>,
     {
         match self {
-            Value::Null => visitor.visit_unit(),
-            Value::Bool(b) => visitor.visit_bool(*b),
-            Value::Int(i) => visitor.visit_i64(*i),
-            Value::UInt(i) => visitor.visit_u64(*i),
-            Value::Float(f) => visitor.visit_f64(*f),
+            BorrowedValue::Null => visitor.visit_unit(),
+            BorrowedValue::Bool(b) => visitor.visit_bool(*b),
+            BorrowedValue::Int(i) => visitor.visit_i64(*i),
+            BorrowedValue::UInt(i) => visitor.visit_u64(*i),
+            BorrowedValue::Float(f) => visitor.visit_f64(*f),
             // zero-copy
-            Value::String(Cow::Borrowed(s)) => visitor.visit_borrowed_str(s),
-            Value::String(Cow::Owned(s)) => visitor.visit_str(s),
-            Value::Seq(items) => visitor.visit_seq(SeqAccessImpl::new(items)),
-            Value::Map(pairs) => visitor.visit_map(MapAccessImpl::new(pairs)),
-            Value::Tagged(_, value) => value.as_ref().deserialize_any(visitor),
+            BorrowedValue::String(Cow::Borrowed(s)) => visitor.visit_borrowed_str(s),
+            BorrowedValue::String(Cow::Owned(s)) => visitor.visit_str(s),
+            BorrowedValue::Seq(items) => visitor.visit_seq(SeqAccessImpl::new(items)),
+            BorrowedValue::Map(pairs) => visitor.visit_map(MapAccessImpl::new(pairs)),
+            BorrowedValue::Tagged(_, value) => value.as_ref().deserialize_any(visitor),
         }
     }
 
@@ -37,7 +37,7 @@ impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
         V: serde::de::Visitor<'de>,
     {
         match self {
-            Value::Null => visitor.visit_none(),
+            BorrowedValue::Null => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
     }
@@ -47,7 +47,7 @@ impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
         V: serde::de::Visitor<'de>,
     {
         match self {
-            Value::Null => visitor.visit_unit(),
+            BorrowedValue::Null => visitor.visit_unit(),
             _ => Err(Error::custom("expected unit")),
         }
     }
@@ -63,8 +63,8 @@ impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
     {
         match self {
 
-            Value::String(s) => visitor.visit_enum(s.as_ref().into_deserializer()),
-            Value::Map(pairs) if pairs.len() == 1 => {
+            BorrowedValue::String(s) => visitor.visit_enum(s.as_ref().into_deserializer()),
+            BorrowedValue::Map(pairs) if pairs.len() == 1 => {
                 visitor.visit_enum(EnumAccessImpl { key: &pairs[0].0, value: &pairs[0].1 })
             }
             _ => Err(Error::custom("expected enum (string or single-key map)")),
@@ -95,11 +95,11 @@ impl<'de> serde::de::Deserializer<'de> for &'de Value<'de> {
 }
 
 pub struct SeqAccessImpl<'de> {
-    iter: std::slice::Iter<'de, Value<'de>>,
+    iter: std::slice::Iter<'de, BorrowedValue<'de>>,
 }
 
 impl<'de> SeqAccessImpl<'de> {
-    fn new(items: &'de Vec<Value<'de>>) -> Self {
+    fn new(items: &'de Vec<BorrowedValue<'de>>) -> Self {
         Self { iter: items.iter() }
     }
 }
@@ -119,12 +119,12 @@ impl<'de> serde::de::SeqAccess<'de> for SeqAccessImpl<'de> {
 }
 
 pub struct MapAccessImpl<'de> {
-    iter: std::slice::Iter<'de, (Value<'de>, Value<'de>)>,
-    pending_value: Option<&'de Value<'de>>,
+    iter: std::slice::Iter<'de, (BorrowedValue<'de>, BorrowedValue<'de>)>,
+    pending_value: Option<&'de BorrowedValue<'de>>,
 }
 
 impl<'de> MapAccessImpl<'de> {
-    pub fn new(pairs: &'de Vec<(Value<'de>, Value<'de>)>) -> Self {
+    pub fn new(pairs: &'de Vec<(BorrowedValue<'de>, BorrowedValue<'de>)>) -> Self {
         Self {
             iter: pairs.iter(),
             pending_value: None,
@@ -160,8 +160,8 @@ impl<'de> serde::de::MapAccess<'de> for MapAccessImpl<'de> {
 }
 
 pub struct EnumAccessImpl<'de> {
-    key: &'de Value<'de>,
-    value: &'de Value<'de>,
+    key: &'de BorrowedValue<'de>,
+    value: &'de BorrowedValue<'de>,
 }
 
 impl<'de> serde::de::EnumAccess<'de> for EnumAccessImpl<'de> {
@@ -178,7 +178,7 @@ impl<'de> serde::de::EnumAccess<'de> for EnumAccessImpl<'de> {
 
 
 pub struct VariantAccessImpl<'de> {
-    value: &'de Value<'de>,
+    value: &'de BorrowedValue<'de>,
 }
 
 impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
@@ -186,7 +186,7 @@ impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
 
     fn unit_variant(self) -> Result<(), Self::Error> {
         match self.value {
-            Value::Null => Ok(()),
+            BorrowedValue::Null => Ok(()),
                 _ => Err(Error::custom("expected unit variant payload to be null"))
         }
     }
@@ -201,7 +201,7 @@ impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
         where
             V: serde::de::Visitor<'de> {
         match self.value {
-            Value::Seq(items) => visitor.visit_seq(SeqAccessImpl::new(items)),
+            BorrowedValue::Seq(items) => visitor.visit_seq(SeqAccessImpl::new(items)),
             _ => Err(Error::custom("expected tuple variant (seq)"))
         }
     }
@@ -214,17 +214,17 @@ impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
         where
             V: serde::de::Visitor<'de> {
         match self.value {
-            Value::Map(pairs) => visitor.visit_map(MapAccessImpl::new(pairs)),
+            BorrowedValue::Map(pairs) => visitor.visit_map(MapAccessImpl::new(pairs)),
             _ => Err(Error::custom("expected struct variant (map)")),
         }
     }
 }
 
-/// Deserialize from a pre-parsed [`Value`].
+/// Deserialize from a pre-parsed [`BorrowedValue`].
 ///
 /// Use this when you want zero-copy borrows into the original input
 /// (struct fields typed as `&str` or `Cow<'de, str>`). The caller owns
-/// the `Value`, so its lifetime is what `T`'s borrowed fields bind to.
+/// the `BorrowedValue`, so its lifetime is what `T`'s borrowed fields bind to.
 ///
 /// # Example
 ///
@@ -240,14 +240,14 @@ impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
 /// let cfg: Cfg<'_> = from_value(&value).unwrap();
 /// assert_eq!(cfg.name, "foo");
 /// ```
-pub fn from_value<'de, T: Deserialize<'de>>(value: &'de Value<'de>) -> crate::Result<T> {
+pub fn from_value<'de, T: Deserialize<'de>>(value: &'de BorrowedValue<'de>) -> crate::Result<T> {
     T::deserialize(value)
 }
 
 /// Parse a YAML string and deserialize the single document into `T`.
 ///
 /// `T` must be [`DeserializeOwned`] — it cannot hold borrowed fields,
-/// because the intermediate [`Value`] is local to this function. For
+/// because the intermediate [`BorrowedValue`] is local to this function. For
 /// borrowed deserialization use [`from_value`] after parsing manually.
 ///
 /// Errors if the input contains more than one document. Use

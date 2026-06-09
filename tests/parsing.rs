@@ -1,28 +1,28 @@
-//! Integration tests for the parser's public Value API.
+//! Integration tests for the parser's public BorrowedValue API.
 //! Unit tests live alongside parser modules; these exercise observable
 //! end-to-end behaviour through `Parser::new(...).parse()`.
 
-use tmyc::{Parser, Value};
+use tmyc::{Parser, BorrowedValue};
 
 #[test]
 fn empty_input_is_null() {
     let value = Parser::new("").parse().unwrap();
-    assert!(matches!(value, Value::Null));
+    assert!(matches!(value, BorrowedValue::Null));
 }
 
 #[test]
 fn whitespace_only_is_null() {
     let value = Parser::new("   \n\n  \n").parse().unwrap();
-    assert!(matches!(value, Value::Null));
+    assert!(matches!(value, BorrowedValue::Null));
 }
 
 #[test]
 fn bom_is_transparently_stripped() {
     let value = Parser::new("\u{FEFF}key: value\n").parse().unwrap();
     match value {
-        Value::Map(pairs) => {
-            assert!(matches!(&pairs[0].0, Value::String(s) if s == "key"));
-            assert!(matches!(&pairs[0].1, Value::String(s) if s == "value"));
+        BorrowedValue::Map(pairs) => {
+            assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "key"));
+            assert!(matches!(&pairs[0].1, BorrowedValue::String(s) if s == "value"));
         }
         _ => panic!("expected map"),
     }

@@ -1,4 +1,4 @@
-use crate::{Parser, Result, Value};
+use crate::{Parser, Result, BorrowedValue};
 
 impl<'a> Parser<'a> {
     /// Parse a block-style sequence at the given indent
@@ -9,11 +9,11 @@ impl<'a> Parser<'a> {
     /// - b
     /// ```
     ///
-    /// Output: `Value::Seq([String("a"), String("b")])`
+    /// Output: `BorrowedValue::Seq([String("a"), String("b")])`
     ///
     /// Stops at EOF or a line whose indent doesn't match `indent` (or whose
     /// first non-blank char isn't a sequence dash).
-    pub(super) fn parse_block_seq(&mut self, indent: usize) -> Result<Value<'a>> {
+    pub(super) fn parse_block_seq(&mut self, indent: usize) -> Result<BorrowedValue<'a>> {
         let mut items = Vec::new();
 
         loop {
@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
 
             items.push(self.parse_node(indent + 1)?);
         }
-        Ok(Value::Seq(items))
+        Ok(BorrowedValue::Seq(items))
     }
 }
 
@@ -57,11 +57,11 @@ mod tests {
             let mut p = Parser::new($yaml);
             let v = p.parse_block_seq(0).unwrap();
             match v {
-                Value::Seq(items) => {
+                BorrowedValue::Seq(items) => {
                     let strs: Vec<&str> = items
                         .iter()
                         .map(|i| match i {
-                            Value::String(s) => s.as_ref(),
+                            BorrowedValue::String(s) => s.as_ref(),
                             _ => panic!("expected string, got {:?}", i),
                         })
                         .collect();
@@ -126,7 +126,7 @@ mod tests {
         let mut p = Parser::new("  - a\n  - b\nother: x\n");
         let v = p.parse_block_seq(2).unwrap();
         match v {
-            Value::Seq(items) => assert_eq!(items.len(), 2),
+            BorrowedValue::Seq(items) => assert_eq!(items.len(), 2),
             _ => panic!(),
         }
         // cursor should be at 'o' of "other"
@@ -138,6 +138,6 @@ mod tests {
         // if nothing follows, we get an empty seq
         let mut p = Parser::new("");
         let v = p.parse_block_seq(0).unwrap();
-        assert!(matches!(v, Value::Seq(items) if items.is_empty()));
+        assert!(matches!(v, BorrowedValue::Seq(items) if items.is_empty()));
     }
 }
