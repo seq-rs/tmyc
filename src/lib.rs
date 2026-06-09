@@ -35,6 +35,43 @@
 //! | [`to_value`]    | Serialize `T: Serialize` to a [`BorrowedValue`] (for inspection or post-processing). |
 //! | [`Parser`]      | Manual parsing API. Use [`Parser::parse_all`] for multi-document streams. |
 //!
+//! ## Two value types: [`Value`] and [`BorrowedValue`]
+//!
+//! There are two flavors of the dynamic data model, and picking one comes down
+//! to a single question: would you rather not write lifetimes, or do you want
+//! zero-copy borrows? You can't have both at once — that's the whole trade.
+//!
+//! | Type | Lifetime | Strings | Reach for it when |
+//! |---|---|---|---|
+//! | [`Value`] | none | owned `String` | You just want a `serde_json::Value`-style value to pass around, return, or drop into a struct field — without `<'a>` following you everywhere. |
+//! | [`BorrowedValue`] | `<'a>` | `Cow<'a, str>` into the source | You're deserializing and want fields that borrow `&str` straight out of the input, no copying (see [`from_value`]). |
+//!
+//! [`Value`] is the one to reach for by default. It carries no lifetime and
+//! implements [`Deserialize`](serde::Deserialize) and
+//! [`Serialize`](serde::Serialize), so `let v: Value = from_str(s)?` and a plain
+//! `tmyc::Value` struct field both just work.
+//!
+//! [`BorrowedValue`] is the parser's native output and the emitter's input — it
+//! holds `Cow::Borrowed` slices of the source, which is what keeps the zero-copy
+//! path actually zero-copy. Hop between the two with `From`: materializing into
+//! an owned [`Value`] clones the strings, but borrowing back the other way
+//! doesn't copy a thing.
+//!
+//! ```
+//! use tmyc::{Value, BorrowedValue, Parser};
+//!
+//! let borrowed = Parser::new("a: 1\n").parse().unwrap();
+//! let owned: Value = borrowed.into();          // materialize: strings cloned
+//! assert!(matches!(owned, Value::Map(_)));
+//!
+//! let view: BorrowedValue = (&owned).into();   // borrow back: nothing copied
+//! assert!(matches!(view, BorrowedValue::Map(_)));
+//! ```
+//!
+//! One asymmetry worth knowing: tags live only on [`BorrowedValue`]. A custom
+//! `!tag` survives parsing as [`BorrowedValue::Tagged`], but deserializing into
+//! an owned [`Value`] quietly unwraps it — you get the inner value, not the tag.
+//!
 //! ## Why `DeserializeOwned` for [`from_str`]?
 //!
 //! [`from_str`] builds an intermediate [`BorrowedValue`] that lives only for the call.
@@ -102,18 +139,21 @@
 //!   stays `String("42")`.
 
 mod de;
+mod de_owned;
 mod emitter;
 mod error;
 mod parser;
 mod patterns;
 mod ser;
 mod value;
+mod owned;
 
 pub use de::{from_str, from_value};
 pub use error::{Error, Result};
 pub use parser::Parser;
 pub use ser::to_value;
 pub use value::BorrowedValue;
+pub use owned::Value;
 
 /// Serialize `T` to a YAML string.
 ///
