@@ -1,4 +1,4 @@
-# The Missing YAML Crate
+# yaml0 - the missing YAML crate
 
 A serde YAML implementation to replace the crate `serde-yaml`, which was
 archived.
