@@ -2,7 +2,7 @@
 //!
 //! This is the mirror of `serde_json::Value`'s own `Deserialize`: it lets the
 //! owned [`Value`] be a deserialization *target*, so a struct field can be
-//! typed `tmyc::Value` and `let v: Value = tmyc::from_str(s)?` works.
+//! typed `yaml0::Value` and `let v: Value = yaml0::from_str(s)?` works.
 //!
 //! Note the direction. `de.rs` implements a [`Deserializer`] *for*
 //! `&BorrowedValue` — it drives some `T` from an existing value. This file
@@ -16,8 +16,8 @@
 //! transparently (the inner value is visited, the tag dropped).
 //!
 //! ```
-//! let v: tmyc::Value = tmyc::from_str("a: 1\nb: [x, y]\n").unwrap();
-//! assert!(matches!(v, tmyc::Value::Map(_)));
+//! let v: yaml0::Value = yaml0::from_str("a: 1\nb: [x, y]\n").unwrap();
+//! assert!(matches!(v, yaml0::Value::Map(_)));
 //! ```
 
 use std::fmt;
@@ -54,20 +54,22 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::Int(v))
     }
     fn visit_u64<E>(self, v: u64) -> Result<Value, E> {
-        Ok(Value::UInt(v))
+        Ok(i64::try_from(v)
+            .map(Value::Int)
+            .unwrap_or_else(|_| Value::String(v.to_string())))
     }
 
     // Other deserializers (e.g. serde_json) may hand back 128-bit ints.
     // Narrow to the supported width or fail loudly rather than truncate.
     fn visit_i128<E: de::Error>(self, v: i128) -> Result<Value, E> {
-        i64::try_from(v)
+        Ok(i64::try_from(v)
             .map(Value::Int)
-            .map_err(|_| E::custom("integer out of range for i64"))
+            .unwrap_or_else(|_| Value::String(v.to_string())))
     }
     fn visit_u128<E: de::Error>(self, v: u128) -> Result<Value, E> {
-        u64::try_from(v)
-            .map(Value::UInt)
-            .map_err(|_| E::custom("integer out of range for u64"))
+        Ok(i64::try_from(v)
+            .map(Value::Int)
+            .unwrap_or_else(|_| Value::String(v.to_string())))
     }
 
     fn visit_f64<E>(self, v: f64) -> Result<Value, E> {

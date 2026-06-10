@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
     /// b: 2
     /// ```
     ///
-    /// Output: `BorrowedValue::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
+    /// Output: `BorrowedValue::Map([(String("a"), Int(1)), (String("b"), Int(2))])`
     ///
     /// Input: `foo\n` → Output: `BorrowedValue::String("foo")` (no `:` follows the
     /// first token, so it's a bare scalar).
@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
     /// c: 3
     /// ```
     ///
-    /// Output: `pairs` extended with `[(String("b"), UInt(2)), (String("c"), UInt(3))]`.
+    /// Output: `pairs` extended with `[(String("b"), Int(2)), (String("c"), Int(3))]`.
     /// Stops at EOF, a line whose indent differs from `indent`, or a
     /// sequence-dash at this indent (compact-seq handoff).
     pub(super) fn parse_block_map_rest(
@@ -177,7 +177,6 @@ mod tests {
                                 BorrowedValue::Null => "<null>".to_string(),
                                 BorrowedValue::Bool(b) => b.to_string(),
                                 BorrowedValue::Int(n) => n.to_string(),
-                                BorrowedValue::UInt(n) => n.to_string(),
                                 BorrowedValue::Float(f) => f.to_string(),
                                 _ => panic!("nested container value, use a different assertion"),
                             };

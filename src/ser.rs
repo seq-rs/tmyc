@@ -101,7 +101,7 @@ impl serde::Serializer for ValueSerializer {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        Ok(Seq(v.iter().map(|b| UInt(*b as u64)).collect()))
+        Ok(Seq(v.iter().map(|b| Int(*b as i64)).collect()))
     }
 
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
@@ -370,7 +370,7 @@ impl serde::ser::SerializeStructVariant for SerializeStructVariantImpl {
 ///
 /// ```
 /// use serde::Serialize;
-/// use tmyc::{to_value, BorrowedValue};
+/// use yaml0::{to_value, BorrowedValue};
 ///
 /// #[derive(Serialize)]
 /// struct Point { x: i32, y: i32 }

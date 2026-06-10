@@ -1,4 +1,4 @@
-//! # tmyc — YAML data format implementation for serde
+//! # yaml0 — YAML data format implementation for serde
 //!
 //! A YAML 1.2 best-effort parser and emmitter with the goals of:
 //!
@@ -18,10 +18,10 @@
 //! }
 //!
 //! let yaml = "name: web\nport: 8080\n";
-//! let svc: Service = tmyc::from_str(yaml).unwrap();
+//! let svc: Service = yaml0::from_str(yaml).unwrap();
 //! assert_eq!(svc, Service { name: "web".into(), port: 8080 });
 //!
-//! let back = tmyc::to_string(&svc).unwrap();
+//! let back = yaml0::to_string(&svc).unwrap();
 //! assert_eq!(back, yaml);
 //! ```
 //!
@@ -49,7 +49,7 @@
 //! [`Value`] is the one to reach for by default. It carries no lifetime and
 //! implements [`Deserialize`](serde::Deserialize) and
 //! [`Serialize`](serde::Serialize), so `let v: Value = from_str(s)?` and a plain
-//! `tmyc::Value` struct field both just work.
+//! `yaml0::Value` struct field both just work.
 //!
 //! [`BorrowedValue`] is the parser's native output and the emitter's input — it
 //! holds `Cow::Borrowed` slices of the source, which is what keeps the zero-copy
@@ -58,7 +58,7 @@
 //! doesn't copy a thing.
 //!
 //! ```
-//! use tmyc::{Value, BorrowedValue, Parser};
+//! use yaml0::{Value, BorrowedValue, Parser};
 //!
 //! let borrowed = Parser::new("a: 1\n").parse().unwrap();
 //! let owned: Value = borrowed.into();          // materialize: strings cloned
@@ -89,8 +89,8 @@
 //! struct Borrowed<'a> { name: &'a str }
 //!
 //! let src = "name: hello\n";
-//! let value = tmyc::Parser::new(src).parse().unwrap();
-//! let b: Borrowed<'_> = tmyc::from_value(&value).unwrap();
+//! let value = yaml0::Parser::new(src).parse().unwrap();
+//! let b: Borrowed<'_> = yaml0::from_value(&value).unwrap();
 //! assert_eq!(b.name, "hello");
 //! ```
 //!
@@ -106,9 +106,79 @@
 //! ---
 //! kind: Service
 //! ";
-//! let docs = tmyc::Parser::new(stream).parse_all().unwrap();
+//! let docs = yaml0::Parser::new(stream).parse_all().unwrap();
 //! assert_eq!(docs.len(), 2);
 //! ```
+//!
+//! ## Number model
+//!
+//! Integers deserialize to a single [`Value::Int`] (`i64`) — there is no separate
+//! unsigned variant, so `5` and `-5` are both `Int`, and `matches!(v, Value::Int(_))`
+//! reliably means "is an integer." A scalar is a [`Value::Float`] only when it
+//! carries a `.`, `e`, or `E`; thus `1` is `Int(1)` while `1.0` is `Float(1.0)`.
+//!
+//! An integer literal outside `i64` range is **not** truncated — it is preserved
+//! verbatim as [`Value::String`], losslessly, and recovered through the accessors,
+//! which parse the text on demand:
+//!
+//! ```text
+//! // 20 digits, beyond i64::MAX → kept as String, read back as u64:
+//! let v: yaml0::Value = yaml0::from_str("18446744073709551615").unwrap();
+//! assert_eq!(v.as_u64(), Some(18446744073709551615));
+//! ```
+//!
+//! Prefer the accessors over matching variants when you only care about the value:
+//! `as_i64`, `as_u64`, `as_i128`, `as_f64`, `as_bool`, `as_str`, `truthy`,
+//! `is_integer`, `is_numeric`. Integers widen into `f64` targets; narrowing conversions that
+//! don't fit fail loudly rather than wrap.
+//!
+//! ## Untagged enums and `flatten`
+//!
+//! yaml0 is fully self-describing, so serde's `#[serde(untagged)]` and
+//! `#[serde(flatten)]` both work — the idiomatic way to model YAML's recurring
+//! "string *or* list *or* mapping" shapes and to capture open-ended keys such as
+//! Compose's `x-*` extensions:
+//!
+//! ```
+//! use std::collections::HashMap;
+//! use serde::Deserialize;
+//! use yaml0::Value;
+//!
+//! #[derive(Deserialize)]
+//! struct Service {
+//!     image: String,
+//!     #[serde(flatten)]
+//!     extensions: HashMap<String, Value>,
+//! }
+//!
+//! let svc: Service = yaml0::from_str("image: nginx\nx-team: platform\n").unwrap();
+//! assert_eq!(svc.image, "nginx");
+//! assert!(svc.extensions.contains_key("x-team"));
+//! ```
+//!
+//! **Gotcha — untagged variant order.** An untagged enum is resolved by trying its
+//! variants top-to-bottom and keeping the first that deserializes. Because an
+//! integer widens into an `f64` without error, a `Float` variant placed *before*
+//! an `Int` variant will swallow integers and you lose their integer-ness. Put the
+//! integer variant first:
+//!
+//! ```
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! #[serde(untagged)]
+//! enum Good { Int(i64), Float(f64) }   // 42 → Int(42)
+//!
+//! #[derive(Deserialize)]
+//! #[serde(untagged)]
+//! enum Bad  { Float(f64), Int(i64) }   // 42 → Float(42.0), integer-ness lost
+//!
+//! assert!(matches!(yaml0::from_str::<Good>("42").unwrap(), Good::Int(42)));
+//! assert!(matches!(yaml0::from_str::<Bad>("42").unwrap(),  Bad::Float(_)));
+//! ```
+//!
+//! This ordering rule is a property of serde's untagged matching, not of yaml0;
+//! it applies to any self-describing format.
 //!
 //! ## YAML feature coverage
 //!
@@ -135,7 +205,7 @@
 //!   necessarily byte-identical in *presentation*.
 //! - **Zero-copy via `Cow<'a, str>`.** Plain and unescaped quoted scalars are
 //!   borrowed slices of the input; allocation only when escapes or folds force it.
-//! - **Lossless scalar resolution.** Plain `42` → `Int/UInt(42)`; quoted `"42"`
+//! - **Lossless scalar resolution.** Plain `42` → `Int(42)`; quoted `"42"`
 //!   stays `String("42")`.
 
 mod de;
@@ -145,15 +215,15 @@ mod error;
 mod parser;
 mod patterns;
 mod ser;
+mod borrowed_value;
 mod value;
-mod owned;
 
 pub use de::{from_str, from_value};
 pub use error::{Error, Result};
 pub use parser::Parser;
 pub use ser::to_value;
-pub use value::BorrowedValue;
-pub use owned::Value;
+pub use borrowed_value::BorrowedValue;
+pub use value::Value;
 
 /// Serialize `T` to a YAML string.
 ///
@@ -169,7 +239,7 @@ pub use owned::Value;
 /// struct Greet { hello: String }
 ///
 /// let g = Greet { hello: "world".to_string() };
-/// assert_eq!(tmyc::to_string(&g).unwrap(), "hello: world\n");
+/// assert_eq!(yaml0::to_string(&g).unwrap(), "hello: world\n");
 /// ```
 pub fn to_string<T: ?Sized + serde::Serialize>(v: &T) -> Result<String> {
     let value = ser::to_value(v)?;

@@ -23,7 +23,6 @@ fn emit_node(v: &BorrowedValue<'_>, indent: usize, out: &mut String) -> Result<(
         BorrowedValue::Null => emit_null(out),
         BorrowedValue::Bool(b) => emit_bool(*b, out),
         BorrowedValue::Int(n) => emit_int(n, out),
-        BorrowedValue::UInt(n) => emit_uint(n, out),
         BorrowedValue::Float(f) => emit_float(f, out),
         BorrowedValue::String(s) => emit_scalar(s, indent, out),
         BorrowedValue::Tagged(tag, v) => {
@@ -51,9 +50,6 @@ fn emit_int(n: &i64, out: &mut String) {
     write!(out, "{n}").unwrap();
 }
 
-fn emit_uint(n: &u64, out: &mut String) {
-    write!(out, "{n}").unwrap();
-}
 
 fn emit_float(f: &f64, out: &mut String) {
     if f.is_nan() {

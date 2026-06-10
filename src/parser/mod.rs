@@ -11,7 +11,7 @@ use std::{borrow::Cow, collections::HashMap};
 use crate::{
     Result, BorrowedValue,
     patterns::resolve_scalar,
-    value::{apply_tag, resolve_merge_keys},
+    borrowed_value::{apply_tag, resolve_merge_keys},
 };
 
 /// YAML parser cursor over a borrowed source string.
@@ -274,12 +274,12 @@ impl<'a> Parser<'a> {
 
     /// Resolve a `*name` alias to a clone of the anchored value
     ///
-    /// Input (with anchor `id` previously registered as `UInt(42)`):
+    /// Input (with anchor `id` previously registered as `Int(42)`):
     /// ```yaml
     /// *id
     /// ```
     ///
-    /// Output: `BorrowedValue::UInt(42)` (cloned from the anchors map). Errors if
+    /// Output: `BorrowedValue::Int(42)` (cloned from the anchors map). Errors if
     /// the anchor name is unknown or empty.
     fn parse_alias(&mut self) -> Result<BorrowedValue<'a>> {
         self.advance(); // consume '*'
@@ -362,7 +362,7 @@ impl<'a> Parser<'a> {
     /// Parse one scalar token (plain, double-quoted, or single-quoted)
     ///
     /// Input: `"42"` → Output: `BorrowedValue::String("42")` (quoted stays string)
-    /// Input: `42`   → Output: `BorrowedValue::UInt(42)` (plain resolves via `resolve_scalar`)
+    /// Input: `42`   → Output: `BorrowedValue::Int(42)` (plain resolves via `resolve_scalar`)
     fn parse_scalar_token(&mut self) -> Result<BorrowedValue<'a>> {
         use BorrowedValue::*;
         match self.peek() {
@@ -425,13 +425,13 @@ mod tests {
     #[test]
     fn standard_int_tag_coerces_quoted() {
         let v = parse("!!int \"5\"\n");
-        assert!(matches!(v, BorrowedValue::UInt(5)));
+        assert!(matches!(v, BorrowedValue::Int(5)));
     }
 
     #[test]
     fn standard_int_tag_accepts_hex() {
         let v = parse("!!int 0xff\n");
-        assert!(matches!(v, BorrowedValue::UInt(255)));
+        assert!(matches!(v, BorrowedValue::Int(255)));
     }
 
     #[test]
@@ -471,7 +471,7 @@ mod tests {
         match v {
             BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!<tag:example.com,2026:x>");
-                assert!(matches!(*inner, BorrowedValue::UInt(5)));
+                assert!(matches!(*inner, BorrowedValue::Int(5)));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn no_tag_parses_plain() {
         let v = parse("42\n");
-        assert!(matches!(v, BorrowedValue::UInt(42)));
+        assert!(matches!(v, BorrowedValue::Int(42)));
     }
 
     // anchors & aliases
@@ -546,8 +546,8 @@ mod tests {
     fn anchor_then_alias_scalar() {
         let pairs = map_pairs(parse("a: &id 42\nb: *id\n"));
         assert_eq!(pairs.len(), 2);
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(42)));
-        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(42)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(42)));
+        assert!(matches!(&pairs[1].1, BorrowedValue::Int(42)));
     }
 
     #[test]
@@ -619,7 +619,7 @@ mod tests {
     fn reanchor_latest_wins() {
         let src = "first: &x 1\nsecond: &x 2\nthird: *x\n";
         let pairs = map_pairs(parse(src));
-        assert!(matches!(&pairs[2].1, BorrowedValue::UInt(2)));
+        assert!(matches!(&pairs[2].1, BorrowedValue::Int(2)));
     }
 
     #[test]
@@ -802,7 +802,7 @@ service:
 ";
         let pairs = map_pairs(parse(src));
         let service = &pairs[1].1;
-        assert!(matches!(get(service, "port"), BorrowedValue::UInt(443)));
+        assert!(matches!(get(service, "port"), BorrowedValue::Int(443)));
         assert!(matches!(get(service, "host"), BorrowedValue::String(s) if s == "localhost"));
         assert!(!keys_of(service).contains(&"<<".to_string()));
     }
@@ -920,8 +920,8 @@ wrapped: !mytag
         match wrapped {
             BorrowedValue::Tagged(tag, inner) => {
                 assert_eq!(tag, "!mytag");
-                assert!(matches!(get(inner, "x"), BorrowedValue::UInt(1)));
-                assert!(matches!(get(inner, "y"), BorrowedValue::UInt(2)));
+                assert!(matches!(get(inner, "x"), BorrowedValue::Int(1)));
+                assert!(matches!(get(inner, "y"), BorrowedValue::Int(2)));
             }
             other => panic!("expected Tagged, got {other:?}"),
         }
@@ -933,7 +933,7 @@ wrapped: !mytag
     fn bom_stripped_simple() {
         let pairs = map_pairs(parse("\u{FEFF}a: 1\n"));
         assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(1)));
     }
 
     #[test]
