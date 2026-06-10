@@ -2,7 +2,7 @@
 //! Confirms YAML 1.2 Core schema scalar typing: plain integers, floats,
 //! booleans, null, and the spec's Norway-problem stance (no/yes are strings).
 
-use tmyc::{Parser, BorrowedValue};
+use yaml0::{Parser, BorrowedValue};
 
 fn map_pair_value<'a>(v: &'a BorrowedValue<'a>, key: &str) -> &'a BorrowedValue<'a> {
     match v {
@@ -20,7 +20,7 @@ fn map_pair_value<'a>(v: &'a BorrowedValue<'a>, key: &str) -> &'a BorrowedValue<
 #[test]
 fn plain_int_resolves_to_uint() {
     let v = Parser::new("k: 42\n").parse().unwrap();
-    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::UInt(42)));
+    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::Int(42)));
 }
 
 #[test]
@@ -38,13 +38,13 @@ fn plain_negative_int() {
 #[test]
 fn plain_hex_int() {
     let v = Parser::new("k: 0xff\n").parse().unwrap();
-    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::UInt(255)));
+    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::Int(255)));
 }
 
 #[test]
 fn plain_octal_int() {
     let v = Parser::new("k: 0o755\n").parse().unwrap();
-    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::UInt(493)));
+    assert!(matches!(map_pair_value(&v, "k"), BorrowedValue::Int(493)));
 }
 
 #[test]

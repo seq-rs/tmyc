@@ -14,8 +14,8 @@ struct Service {
 #[test]
 fn struct_roundtrip() {
     let svc = Service { name: "web".into(), port: 8080, enabled: true };
-    let yaml = tmyc::to_string(&svc).unwrap();
-    let back: Service = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&svc).unwrap();
+    let back: Service = yaml0::from_str(&yaml).unwrap();
     assert_eq!(svc, back);
 }
 
@@ -42,8 +42,8 @@ fn nested_struct_with_map_and_vec() {
         ServiceEntry { image: "postgres".into(), ports: vec!["5432:5432".into()] },
     );
     let c = Compose { services };
-    let yaml = tmyc::to_string(&c).unwrap();
-    let back: Compose = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&c).unwrap();
+    let back: Compose = yaml0::from_str(&yaml).unwrap();
     assert_eq!(c, back);
 }
 
@@ -56,16 +56,16 @@ struct WithOption {
 #[test]
 fn option_some() {
     let v = WithOption { required: "hi".into(), maybe: Some(42) };
-    let yaml = tmyc::to_string(&v).unwrap();
-    let back: WithOption = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&v).unwrap();
+    let back: WithOption = yaml0::from_str(&yaml).unwrap();
     assert_eq!(v, back);
 }
 
 #[test]
 fn option_none_roundtrips_as_null() {
     let v = WithOption { required: "hi".into(), maybe: None };
-    let yaml = tmyc::to_string(&v).unwrap();
-    let back: WithOption = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&v).unwrap();
+    let back: WithOption = yaml0::from_str(&yaml).unwrap();
     assert_eq!(v, back);
 }
 
@@ -80,32 +80,32 @@ enum Mode {
 #[test]
 fn enum_unit_variant() {
     let m = Mode::Unit;
-    let yaml = tmyc::to_string(&m).unwrap();
-    let back: Mode = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&m).unwrap();
+    let back: Mode = yaml0::from_str(&yaml).unwrap();
     assert_eq!(m, back);
 }
 
 #[test]
 fn enum_newtype_variant() {
     let m = Mode::Newtype(42);
-    let yaml = tmyc::to_string(&m).unwrap();
-    let back: Mode = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&m).unwrap();
+    let back: Mode = yaml0::from_str(&yaml).unwrap();
     assert_eq!(m, back);
 }
 
 #[test]
 fn enum_tuple_variant() {
     let m = Mode::Tuple(1, "hi".into());
-    let yaml = tmyc::to_string(&m).unwrap();
-    let back: Mode = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&m).unwrap();
+    let back: Mode = yaml0::from_str(&yaml).unwrap();
     assert_eq!(m, back);
 }
 
 #[test]
 fn enum_struct_variant() {
     let m = Mode::Struct { x: 1, y: 2 };
-    let yaml = tmyc::to_string(&m).unwrap();
-    let back: Mode = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&m).unwrap();
+    let back: Mode = yaml0::from_str(&yaml).unwrap();
     assert_eq!(m, back);
 }
 
@@ -115,17 +115,17 @@ struct Port(u16);
 #[test]
 fn newtype_struct_transparent() {
     let p = Port(8080);
-    let yaml = tmyc::to_string(&p).unwrap();
+    let yaml = yaml0::to_string(&p).unwrap();
     assert_eq!(yaml, "8080\n");
-    let back: Port = tmyc::from_str(&yaml).unwrap();
+    let back: Port = yaml0::from_str(&yaml).unwrap();
     assert_eq!(p, back);
 }
 
 #[test]
 fn vec_of_primitives() {
     let v = vec![1u32, 2, 3];
-    let yaml = tmyc::to_string(&v).unwrap();
-    let back: Vec<u32> = tmyc::from_str(&yaml).unwrap();
+    let yaml = yaml0::to_string(&v).unwrap();
+    let back: Vec<u32> = yaml0::from_str(&yaml).unwrap();
     assert_eq!(v, back);
 }
 
@@ -137,8 +137,8 @@ fn from_value_keeps_borrow() {
         name: &'a str,
     }
     let src = "name: hello\n";
-    let value = tmyc::Parser::new(src).parse().unwrap();
-    let b: Borrowed<'_> = tmyc::from_value(&value).unwrap();
+    let value = yaml0::Parser::new(src).parse().unwrap();
+    let b: Borrowed<'_> = yaml0::from_value(&value).unwrap();
     assert_eq!(b.name, "hello");
 
     // Pointer-eq check: b.name should be inside src's byte range
@@ -154,13 +154,13 @@ fn from_value_keeps_borrow() {
 #[test]
 fn from_str_errors_on_multi_doc() {
     let src = "---\na: 1\n---\nb: 2\n";
-    let result: tmyc::Result<std::collections::BTreeMap<String, i32>> = tmyc::from_str(src);
+    let result: yaml0::Result<std::collections::BTreeMap<String, i32>> = yaml0::from_str(src);
     assert!(result.is_err());
 }
 
 #[test]
 fn parse_all_multi_doc() {
     let src = "---\nkind: Pod\n---\nkind: Service\n";
-    let docs = tmyc::Parser::new(src).parse_all().unwrap();
+    let docs = yaml0::Parser::new(src).parse_all().unwrap();
     assert_eq!(docs.len(), 2);
 }
