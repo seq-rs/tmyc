@@ -1,18 +1,18 @@
 [package]
-name = "tmyc"
+name = "yaml0"
 version = "0.1.3"
 edition = "2024"
 authors = ["recrypted <git@recrypted.net>"]
 keywords = ["derive", "serde", "serialization", "yaml"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/seq-rs/tmyc"
-documentation = "https://docs.rs/tmyc/"
+repository = "https://github.com/seq-rs/yaml0"
+documentation = "https://docs.rs/yaml0/"
 description = "Implementation of serde serialization and deserialization from YAML data format"
 rust-version = "1.96.0"
 categories = ["encoding", "parser-implementations", "parsing"]
 
 [lib]
-name = "tmyc"
+name = "yaml0"
 path = "src/lib.rs"
 
 [dependencies]

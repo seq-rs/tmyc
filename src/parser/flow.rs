@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use crate::{
     Parser, Result, BorrowedValue,
     patterns::resolve_scalar,
-    value::apply_tag,
+    borrowed_value::apply_tag,
 };
 
 impl<'a> Parser<'a> {
     /// Parse a flow-style sequence
     ///
-    /// Input: `[1, 2, 3]` → Output: `BorrowedValue::Seq([UInt(1), UInt(2), UInt(3)])`
+    /// Input: `[1, 2, 3]` → Output: `BorrowedValue::Seq([Int(1), Int(2), Int(3)])`
     ///
     /// Cursor enters at `[`. Skips whitespace/newlines/comments between
     /// tokens. Empty (`[]`) and trailing-comma (`[a,]`) forms are legal.
@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a flow-style mapping
     ///
-    /// Input: `{a: 1, b: 2}` → Output: `BorrowedValue::Map([(String("a"), UInt(1)), (String("b"), UInt(2))])`
+    /// Input: `{a: 1, b: 2}` → Output: `BorrowedValue::Map([(String("a"), Int(1)), (String("b"), Int(2))])`
     ///
     /// Cursor enters at `{`. Supports JSON-style `{"a":1}` and spaceless
     /// `{a:1}` per spec §7.5.3 (plain scalars in flow can't end with `:`).
@@ -206,9 +206,9 @@ mod tests {
     #[test]
     fn flow_seq_ints() {
         let items = as_seq(parse("[1, 2, 3]\n"));
-        assert!(matches!(&items[0], BorrowedValue::UInt(1)));
-        assert!(matches!(&items[1], BorrowedValue::UInt(2)));
-        assert!(matches!(&items[2], BorrowedValue::UInt(3)));
+        assert!(matches!(&items[0], BorrowedValue::Int(1)));
+        assert!(matches!(&items[1], BorrowedValue::Int(2)));
+        assert!(matches!(&items[2], BorrowedValue::Int(3)));
     }
 
     #[test]
@@ -264,8 +264,8 @@ mod tests {
             BorrowedValue::Seq(s) => s,
             _ => panic!(),
         };
-        assert!(matches!(&items[0], BorrowedValue::UInt(7)));
-        assert!(matches!(&items[1], BorrowedValue::UInt(7)));
+        assert!(matches!(&items[0], BorrowedValue::Int(7)));
+        assert!(matches!(&items[1], BorrowedValue::Int(7)));
     }
 
     // flow map
@@ -279,39 +279,39 @@ mod tests {
     fn flow_map_simple() {
         let pairs = as_map(parse("{a: 1, b: 2}\n"));
         assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(1)));
         assert!(matches!(&pairs[1].0, BorrowedValue::String(s) if s == "b"));
-        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
+        assert!(matches!(&pairs[1].1, BorrowedValue::Int(2)));
     }
 
     #[test]
     fn flow_map_quoted_keys() {
         let pairs = as_map(parse("{\"k 1\": 1}\n"));
         assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "k 1"));
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(1)));
     }
 
     #[test]
     fn flow_map_json_style_quoted_key() {
         let pairs = as_map(parse("{\"a\":1}\n"));
         assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(1)));
     }
 
     #[test]
     fn flow_map_colon_no_space() {
         let pairs = as_map(parse("{a:1, b:2}\n"));
         assert!(matches!(&pairs[0].0, BorrowedValue::String(s) if s == "a"));
-        assert!(matches!(&pairs[0].1, BorrowedValue::UInt(1)));
+        assert!(matches!(&pairs[0].1, BorrowedValue::Int(1)));
         assert!(matches!(&pairs[1].0, BorrowedValue::String(s) if s == "b"));
-        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
+        assert!(matches!(&pairs[1].1, BorrowedValue::Int(2)));
     }
 
     #[test]
     fn flow_map_implicit_null_value() {
         let pairs = as_map(parse("{a:, b: 2}\n"));
         assert!(matches!(&pairs[0].1, BorrowedValue::Null));
-        assert!(matches!(&pairs[1].1, BorrowedValue::UInt(2)));
+        assert!(matches!(&pairs[1].1, BorrowedValue::Int(2)));
     }
 
     #[test]

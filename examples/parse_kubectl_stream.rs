@@ -17,7 +17,7 @@ struct Metadata {
     name: String,
 }
 
-fn main() -> tmyc::Result<()> {
+fn main() -> yaml0::Result<()> {
     let stream = "\
 ---
 apiVersion: v1
@@ -43,11 +43,11 @@ metadata:
 ";
 
     // Parse all docs, then deserialize each into a typed Resource.
-    let docs = tmyc::Parser::new(stream).parse_all()?;
+    let docs = yaml0::Parser::new(stream).parse_all()?;
     println!("Stream contains {} documents", docs.len());
 
     for doc in &docs {
-        let r: Resource = tmyc::from_value(doc)?;
+        let r: Resource = yaml0::from_value(doc)?;
         println!("  {} {} ({})", r.api_version, r.kind, r.metadata.name);
     }
 

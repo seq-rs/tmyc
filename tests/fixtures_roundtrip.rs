@@ -1,14 +1,14 @@
 //! Parse → emit → parse roundtrip tests against real-world-shaped YAML.
 //!
-//! The "acceptance bar" from `tmyc-76k`: confirm that the data survives a
+//! The "acceptance bar" from `yaml0-76k`: confirm that the data survives a
 //! full roundtrip through the public API. Presentation details may shift
 //! (folded blocks become literal, anchors get expanded), but the
-//! resulting [`tmyc::BorrowedValue`] must be structurally equal between the
+//! resulting [`yaml0::BorrowedValue`] must be structurally equal between the
 //! first and second parse.
 
 use std::fs;
 
-use tmyc::{Parser, BorrowedValue};
+use yaml0::{Parser, BorrowedValue};
 
 const FIXTURES: &str = "tests/fixtures";
 
@@ -17,7 +17,7 @@ fn assert_roundtrips(path: &str) {
     let src = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
     let first = Parser::new(&src).parse().expect("first parse");
-    let emitted = tmyc::to_string(&first).expect("emit");
+    let emitted = yaml0::to_string(&first).expect("emit");
     let second = Parser::new(&emitted).parse().expect("reparse");
     assert_eq!(
         first, second,
@@ -55,7 +55,7 @@ fn kubectl_stream_per_doc_roundtrips() {
     assert_eq!(docs.len(), 2, "expected 2 docs in kubectl_stream");
 
     for (i, doc) in docs.iter().enumerate() {
-        let emitted = tmyc::to_string(doc).expect("emit");
+        let emitted = yaml0::to_string(doc).expect("emit");
         let reparsed = Parser::new(&emitted).parse().expect("reparse");
         assert_eq!(
             doc, &reparsed,
@@ -74,9 +74,9 @@ fn value_construct_emit_parse_matches() {
             BorrowedValue::String(Cow::Borrowed("name")),
             BorrowedValue::String(Cow::Borrowed("test")),
         ),
-        (BorrowedValue::String(Cow::Borrowed("count")), BorrowedValue::UInt(42)),
+        (BorrowedValue::String(Cow::Borrowed("count")), BorrowedValue::Int(42)),
     ]);
-    let emitted = tmyc::to_string(&constructed).unwrap();
+    let emitted = yaml0::to_string(&constructed).unwrap();
     let reparsed = Parser::new(&emitted).parse().unwrap();
     assert_eq!(constructed, reparsed);
 }
@@ -84,7 +84,7 @@ fn value_construct_emit_parse_matches() {
 #[test]
 fn empty_doc_roundtrip() {
     let first = Parser::new("").parse().unwrap();
-    let emitted = tmyc::to_string(&first).unwrap();
+    let emitted = yaml0::to_string(&first).unwrap();
     let second = Parser::new(&emitted).parse().unwrap();
     assert_eq!(first, second);
     assert!(matches!(first, BorrowedValue::Null));

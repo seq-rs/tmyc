@@ -40,7 +40,7 @@ struct Container {
 #[test]
 fn k8s_pod_deserializes() {
     let src = fs::read_to_string(format!("{FIXTURES}/k8s_pod.yaml")).unwrap();
-    let pod: K8sPod = tmyc::from_str(&src).unwrap();
+    let pod: K8sPod = yaml0::from_str(&src).unwrap();
     assert_eq!(pod.kind, "Pod");
     assert_eq!(pod.api_version, "v1");
     assert_eq!(pod.metadata.name, "web");
@@ -53,61 +53,61 @@ fn k8s_pod_deserializes() {
 #[test]
 fn compose_merge_keys_applied() {
     let src = fs::read_to_string(format!("{FIXTURES}/compose.yaml")).unwrap();
-    let value = tmyc::Parser::new(&src).parse().unwrap();
+    let value = yaml0::Parser::new(&src).parse().unwrap();
     // services.web should have `restart: always` from defaults
     let services = match &value {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "services" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "services" => Some(v),
                 _ => None,
             })
             .expect("services key"),
         _ => panic!("expected top-level map"),
     };
     let web = match services {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "web" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "web" => Some(v),
                 _ => None,
             })
             .expect("web key"),
         _ => panic!("expected services map"),
     };
     let web_pairs = match web {
-        tmyc::BorrowedValue::Map(p) => p,
+        yaml0::BorrowedValue::Map(p) => p,
         _ => panic!(),
     };
     let restart = web_pairs.iter().find_map(|(k, v)| match k {
-        tmyc::BorrowedValue::String(s) if s == "restart" => Some(v),
+        yaml0::BorrowedValue::String(s) if s == "restart" => Some(v),
         _ => None,
     });
     assert!(
-        matches!(restart, Some(tmyc::BorrowedValue::String(s)) if s == "always"),
+        matches!(restart, Some(yaml0::BorrowedValue::String(s)) if s == "always"),
         "merge key didn't splice `restart: always` into web"
     );
     // api should have overridden restart to on-failure
     let api = match services {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "api" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "api" => Some(v),
                 _ => None,
             })
             .expect("api key"),
         _ => panic!(),
     };
     let api_pairs = match api {
-        tmyc::BorrowedValue::Map(p) => p,
+        yaml0::BorrowedValue::Map(p) => p,
         _ => panic!(),
     };
     let api_restart = api_pairs.iter().find_map(|(k, v)| match k {
-        tmyc::BorrowedValue::String(s) if s == "restart" => Some(v),
+        yaml0::BorrowedValue::String(s) if s == "restart" => Some(v),
         _ => None,
     });
     assert!(
-        matches!(api_restart, Some(tmyc::BorrowedValue::String(s)) if s == "on-failure"),
+        matches!(api_restart, Some(yaml0::BorrowedValue::String(s)) if s == "on-failure"),
         "explicit api.restart should override merged-in value"
     );
 }
@@ -115,36 +115,36 @@ fn compose_merge_keys_applied() {
 #[test]
 fn kubectl_stream_parses_multi_doc() {
     let src = fs::read_to_string(format!("{FIXTURES}/kubectl_stream.yaml")).unwrap();
-    let docs = tmyc::Parser::new(&src).parse_all().unwrap();
+    let docs = yaml0::Parser::new(&src).parse_all().unwrap();
     assert_eq!(docs.len(), 2);
 }
 
 #[test]
 fn sops_secret_block_scalars_parse() {
     let src = fs::read_to_string(format!("{FIXTURES}/sops_secret.yaml")).unwrap();
-    let value = tmyc::Parser::new(&src).parse().unwrap();
+    let value = yaml0::Parser::new(&src).parse().unwrap();
     let data = match &value {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "data" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "data" => Some(v),
                 _ => None,
             })
             .expect("data key"),
         _ => panic!(),
     };
     let cert = match data {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "cert" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "cert" => Some(v),
                 _ => None,
             })
             .expect("cert key"),
         _ => panic!(),
     };
     let cert_str = match cert {
-        tmyc::BorrowedValue::String(s) => s.as_ref(),
+        yaml0::BorrowedValue::String(s) => s.as_ref(),
         _ => panic!("expected string cert"),
     };
     // Literal block: newlines preserved between lines
@@ -154,17 +154,17 @@ fn sops_secret_block_scalars_parse() {
 
     // Folded description: newlines folded to spaces
     let description = match data {
-        tmyc::BorrowedValue::Map(pairs) => pairs
+        yaml0::BorrowedValue::Map(pairs) => pairs
             .iter()
             .find_map(|(k, v)| match k {
-                tmyc::BorrowedValue::String(s) if s == "description" => Some(v),
+                yaml0::BorrowedValue::String(s) if s == "description" => Some(v),
                 _ => None,
             })
             .expect("description key"),
         _ => panic!(),
     };
     let desc_str = match description {
-        tmyc::BorrowedValue::String(s) => s.as_ref(),
+        yaml0::BorrowedValue::String(s) => s.as_ref(),
         _ => panic!(),
     };
     assert!(desc_str.contains("spans multiple lines but joins them"));

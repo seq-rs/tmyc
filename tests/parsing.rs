@@ -2,7 +2,7 @@
 //! Unit tests live alongside parser modules; these exercise observable
 //! end-to-end behaviour through `Parser::new(...).parse()`.
 
-use tmyc::{Parser, BorrowedValue};
+use yaml0::{Parser, BorrowedValue};
 
 #[test]
 fn empty_input_is_null() {

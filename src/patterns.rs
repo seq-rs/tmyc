@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{BorrowedValue};
+use crate::BorrowedValue;
 
 pub(crate) fn seems_null(s: &str) -> bool {
     matches!(s, "" | "~" | "null" | "Null" | "NULL")
@@ -16,16 +16,17 @@ pub(crate) fn seems_int(s: &str) -> bool {
 
 pub(crate) fn parse_yaml_int(s: &str) -> Option<BorrowedValue<'static>> {
     if let Some(hex) = s.strip_prefix("0x") {
-        return u64::from_str_radix(hex, 16).ok().map(BorrowedValue::UInt);
+        return i64::try_from(u64::from_str_radix(hex, 16).ok()?)
+            .ok()
+            .map(BorrowedValue::Int);
     }
     if let Some(oct) = s.strip_prefix("0o") {
-        return u64::from_str_radix(oct, 8).ok().map(BorrowedValue::UInt);
+        return i64::try_from(u64::from_str_radix(oct, 8).ok()?)
+            .ok()
+            .map(BorrowedValue::Int);
     }
     let body = s.strip_prefix('+').unwrap_or(s);
-    if let Ok(n) = body.parse::<u64>() {
-        return Some(BorrowedValue::UInt(n));
-    }
-    s.parse::<i64>().ok().map(BorrowedValue::Int)
+    body.parse::<i64>().ok().map(BorrowedValue::Int)
 }
 
 pub(crate) fn seems_float(s: &str) -> bool {
@@ -147,7 +148,7 @@ mod tests {
     fn resolves_int() {
         assert!(matches!(
             resolve_scalar("42".into()),
-            BorrowedValue::UInt(42)
+            BorrowedValue::Int(42)
         ));
     }
     #[test]
@@ -158,10 +159,10 @@ mod tests {
         ));
     }
     #[test]
-    fn resolves_big_uint() {
+    fn resolves_big_uint_as_string() {
         assert!(matches!(
             resolve_scalar("18446744073709551610".into()),
-            BorrowedValue::UInt(_)
+            BorrowedValue::String(_)
         ));
     }
     #[test]
@@ -216,7 +217,7 @@ mod tests {
     fn yaml_int_decimal() {
         assert!(matches!(
             parse_yaml_int("42"),
-            Some(BorrowedValue::UInt(42))
+            Some(BorrowedValue::Int(42))
         ));
     }
     #[test]
@@ -230,28 +231,28 @@ mod tests {
     fn yaml_int_plus_prefix() {
         assert!(matches!(
             parse_yaml_int("+42"),
-            Some(BorrowedValue::UInt(42))
+            Some(BorrowedValue::Int(42))
         ));
     }
     #[test]
     fn yaml_int_hex() {
         assert!(matches!(
             parse_yaml_int("0xff"),
-            Some(BorrowedValue::UInt(255))
+            Some(BorrowedValue::Int(255))
         ));
     }
     #[test]
     fn yaml_int_hex_mixed_case() {
         assert!(matches!(
             parse_yaml_int("0xAbCd"),
-            Some(BorrowedValue::UInt(43981))
+            Some(BorrowedValue::Int(43981))
         ));
     }
     #[test]
     fn yaml_int_octal() {
         assert!(matches!(
             parse_yaml_int("0o755"),
-            Some(BorrowedValue::UInt(493))
+            Some(BorrowedValue::Int(493))
         ));
     }
     #[test]
@@ -327,21 +328,21 @@ mod tests {
     fn resolves_hex() {
         assert!(matches!(
             resolve_scalar("0xff".into()),
-            BorrowedValue::UInt(255)
+            BorrowedValue::Int(255)
         ));
     }
     #[test]
     fn resolves_octal() {
         assert!(matches!(
             resolve_scalar("0o17".into()),
-            BorrowedValue::UInt(15)
+            BorrowedValue::Int(15)
         ));
     }
     #[test]
     fn resolves_plus_int() {
         assert!(matches!(
             resolve_scalar("+42".into()),
-            BorrowedValue::UInt(42)
+            BorrowedValue::Int(42)
         ));
     }
 }

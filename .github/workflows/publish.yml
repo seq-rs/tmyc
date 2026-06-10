@@ -24,6 +24,6 @@ jobs:
       - run: cargo test --workspace
 
 
-      - run: cargo publish -p tmyc
+      - run: cargo publish -p yaml0
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

@@ -15,7 +15,6 @@ impl<'de> serde::de::Deserializer<'de> for &'de BorrowedValue<'de> {
             BorrowedValue::Null => visitor.visit_unit(),
             BorrowedValue::Bool(b) => visitor.visit_bool(*b),
             BorrowedValue::Int(i) => visitor.visit_i64(*i),
-            BorrowedValue::UInt(i) => visitor.visit_u64(*i),
             BorrowedValue::Float(f) => visitor.visit_f64(*f),
             // zero-copy
             BorrowedValue::String(Cow::Borrowed(s)) => visitor.visit_borrowed_str(s),
@@ -230,7 +229,7 @@ impl<'de> VariantAccess<'de> for VariantAccessImpl<'de> {
 ///
 /// ```
 /// use serde::Deserialize;
-/// use tmyc::{from_value, Parser};
+/// use yaml0::{from_value, Parser};
 ///
 /// #[derive(Deserialize)]
 /// struct Cfg<'a> { name: &'a str }
@@ -261,7 +260,7 @@ pub fn from_value<'de, T: Deserialize<'de>>(value: &'de BorrowedValue<'de>) -> c
 /// #[derive(Deserialize, PartialEq, Debug)]
 /// struct Cfg { name: String, port: u16 }
 ///
-/// let cfg: Cfg = tmyc::from_str("name: web\nport: 8080\n").unwrap();
+/// let cfg: Cfg = yaml0::from_str("name: web\nport: 8080\n").unwrap();
 /// assert_eq!(cfg, Cfg { name: "web".into(), port: 8080 });
 /// ```
 pub fn from_str<T: DeserializeOwned>(s: &str) -> crate::Result<T> {

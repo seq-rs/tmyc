@@ -21,7 +21,7 @@ struct Compose {
     services: BTreeMap<String, Service>,
 }
 
-fn main() -> tmyc::Result<()> {
+fn main() -> yaml0::Result<()> {
     // Build a small compose-like structure in code
     let mut services = BTreeMap::new();
     services.insert(
@@ -49,11 +49,11 @@ fn main() -> tmyc::Result<()> {
     let compose = Compose { version: "3.8".into(), services };
 
     // Struct → YAML
-    let yaml = tmyc::to_string(&compose)?;
+    let yaml = yaml0::to_string(&compose)?;
     println!("=== Serialised YAML ===\n{yaml}");
 
     // YAML → Struct
-    let parsed: Compose = tmyc::from_str(&yaml)?;
+    let parsed: Compose = yaml0::from_str(&yaml)?;
     println!("=== Re-parsed struct ===");
     println!("version: {}", parsed.version);
     for (name, svc) in &parsed.services {
